@@ -1,0 +1,2739 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>hatchling</title>
+<meta name="color-scheme" content="dark light">
+<style>
+/* ─────────────────────────────────────────────────────────────
+   tokens
+   ───────────────────────────────────────────────────────────── */
+:root{
+  --bg:#0e0f13; --surface:#15171d; --surface-2:#1c1f27; --surface-3:#232733;
+  --line:#262a35; --line-soft:#1e222b;
+  --text:#e9ebf1; --dim:#99a0b0; --faint:#69707f;
+  --accent:#f2a93b; --accent-ink:#1a1204; --accent-soft:#3a2b10;
+  --danger:#e5555a; --danger-soft:#3a1a1c;
+  --good:#4ec08d;
+  --radius:14px; --radius-sm:9px;
+  --shadow:0 12px 34px rgba(0,0,0,.45);
+  --tap:rgba(255,255,255,.055);
+  --skel-a:#1c1f27; --skel-b:#262a35;
+  --hd-h:52px;
+  --maxw:620px;
+}
+@media (prefers-color-scheme: light){
+  :root{
+    --bg:#faf9f7; --surface:#ffffff; --surface-2:#f4f2ee; --surface-3:#eceae4;
+    --line:#e4e1da; --line-soft:#eeece7;
+    --text:#181920; --dim:#5f6470; --faint:#8a909c;
+    --accent:#b3720c; --accent-ink:#fff; --accent-soft:#f8ecd6;
+    --danger:#c8393e; --danger-soft:#fbe8e8;
+    --good:#217a56;
+    --shadow:0 12px 34px rgba(30,25,15,.14);
+    --tap:rgba(0,0,0,.04);
+    --skel-a:#eceae4; --skel-b:#f6f4f0;
+  }
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0; background:var(--bg); color:var(--text);
+  font:15px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+  -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+  overflow:hidden;
+}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+svg{display:block}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+::selection{background:var(--accent-soft);color:var(--text)}
+
+/* ─────────────────────────────────────────────────────────────
+   shell
+   ───────────────────────────────────────────────────────────── */
+#app{position:fixed;inset:0;display:flex;flex-direction:column}
+
+.topbar{
+  height:var(--hd-h); flex:0 0 auto; display:flex; align-items:center; gap:6px;
+  padding:0 10px; padding-top:env(safe-area-inset-top);
+  height:calc(var(--hd-h) + env(safe-area-inset-top));
+  background:color-mix(in srgb, var(--bg) 86%, transparent);
+  backdrop-filter:saturate(1.4) blur(14px);
+  border-bottom:1px solid var(--line-soft); position:relative; z-index:20;
+}
+.brand{
+  display:flex;align-items:center;gap:7px;font-weight:650;letter-spacing:-.01em;
+  padding:0 2px; min-width:0;
+}
+.brand .egg{width:17px;height:17px;color:var(--accent);flex:0 0 auto}
+.crumb{color:var(--dim);font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.crumb::before{content:"/";margin:0 7px;color:var(--faint)}
+.grow{flex:1 1 auto;min-width:8px}
+
+.icon-btn{
+  width:32px;height:32px;border-radius:9px;display:grid;place-items:center;color:var(--dim);
+  transition:background .12s,color .12s; flex:0 0 auto;
+}
+.icon-btn:hover{background:var(--tap);color:var(--text)}
+.icon-btn svg{width:17px;height:17px}
+.icon-btn[hidden]{display:none}
+
+.signer-btn{
+  display:flex;align-items:center;gap:7px;height:32px;padding:0 11px;border-radius:9px;
+  background:var(--surface-2);border:1px solid var(--line);font-size:13px;font-weight:550;
+  color:var(--text);white-space:nowrap;transition:border-color .15s,background .15s;
+}
+.signer-btn:hover{background:var(--surface-3)}
+.signer-btn .dot{width:7px;height:7px;border-radius:50%;background:var(--faint);flex:0 0 auto}
+.signer-btn[data-state="connecting"] .dot{background:var(--accent);animation:pulse 1.1s ease-in-out infinite}
+.signer-btn[data-state="connected"] .dot{background:var(--good)}
+.signer-btn[data-state="connected"]{border-color:var(--line)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
+
+/* ─────────────────────────────────────────────────────────────
+   view stack
+   ───────────────────────────────────────────────────────────── */
+#views{position:relative;flex:1 1 auto;min-height:0}
+.view{
+  position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;
+  overscroll-behavior:contain;-webkit-overflow-scrolling:touch;scrollbar-gutter:stable;
+}
+.view[hidden]{display:none}
+.view-inner{max-width:var(--maxw);margin:0 auto;padding:10px 12px 96px}
+.view.entering{animation:slidein .18s cubic-bezier(.22,.61,.36,1)}
+@keyframes slidein{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.view.entering{animation:none}}
+
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:var(--surface-3);border-radius:10px;border:3px solid var(--bg)}
+::-webkit-scrollbar-track{background:transparent}
+
+/* ─────────────────────────────────────────────────────────────
+   cards
+   ───────────────────────────────────────────────────────────── */
+.card{
+  background:var(--surface);border:1px solid var(--line-soft);border-radius:var(--radius);
+  margin-bottom:10px; overflow:hidden;
+  content-visibility:auto; contain-intrinsic-size:auto 260px;
+}
+.card.dismissing{
+  transition:opacity .16s ease, transform .16s ease;
+  opacity:0; transform:scale(.985); pointer-events:none;
+}
+
+.card-hd{display:flex;align-items:flex-start;gap:10px;padding:12px 12px 0}
+.who{min-width:0;flex:1 1 auto;padding-top:1px}
+.name-row{display:flex;align-items:center;gap:6px;min-width:0;height:20px}
+.dname{
+  font-weight:640;font-size:14.5px;letter-spacing:-.005em;line-height:20px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;
+}
+.dname.pending{
+  display:inline-block;width:118px;height:11px;border-radius:5px;vertical-align:middle;
+  background:linear-gradient(90deg,var(--skel-a),var(--skel-b),var(--skel-a));
+  background-size:200% 100%;animation:shim 1.35s linear infinite;
+}
+.sub-row{display:flex;align-items:center;gap:6px;height:17px;color:var(--faint);font-size:12.5px}
+.npub{font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sep{opacity:.5}
+.ts{white-space:nowrap;flex:0 0 auto}
+
+.avatar{
+  display:block;width:42px;height:42px;flex:0 0 auto;border-radius:50%;overflow:hidden;position:relative;
+  background:linear-gradient(135deg,var(--g1),var(--g2));
+  border:1px solid var(--line-soft);
+}
+.avatar img{
+  position:absolute;inset:0;width:100%;height:100%;object-fit:cover;
+  opacity:0;transition:opacity .22s ease;background:var(--surface-2);
+}
+.avatar img.on{opacity:1}
+.avatar.lg{width:74px;height:74px;border-width:3px;border-style:solid;border-color:var(--surface)}
+
+.reason{
+  display:flex;align-items:flex-start;gap:7px;margin:9px 12px 0;padding:7px 10px;
+  background:var(--accent-soft);border-radius:var(--radius-sm);
+  color:var(--text);font-size:12.5px;line-height:1.42;
+}
+.reason svg{width:13px;height:13px;color:var(--accent);flex:0 0 auto;margin-top:2px}
+
+.notes{margin-top:2px}
+.note{padding:10px 12px 4px;position:relative;cursor:pointer}
+.note + .note{border-top:1px solid var(--line-soft);margin-top:4px}
+.note:hover{background:var(--tap)}
+.note-body{
+  white-space:pre-wrap;overflow-wrap:anywhere;font-size:14.5px;line-height:1.52;
+  color:var(--text);margin:0;
+}
+.note-body.clamped{
+  display:-webkit-box;-webkit-line-clamp:10;-webkit-box-orient:vertical;overflow:hidden;
+}
+.more-btn{color:var(--accent);font-size:13px;font-weight:550;padding:5px 0 0}
+.entity{color:var(--faint);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px}
+.note-head{display:flex;align-items:center;gap:6px;color:var(--faint);font-size:12.5px;margin-bottom:5px}
+
+/* action row */
+.acts{display:flex;align-items:center;gap:2px;padding:4px 0 6px;margin-top:2px}
+.act{
+  display:flex;align-items:center;gap:6px;height:30px;padding:0 9px;border-radius:8px;
+  color:var(--dim);font-size:12.5px;font-weight:500;transition:background .12s,color .12s;
+}
+.act:hover:not(:disabled){background:var(--tap);color:var(--text)}
+.act:disabled{opacity:.4;cursor:not-allowed}
+.act svg{width:15px;height:15px}
+.act.on{color:var(--accent)}
+.act.danger:hover:not(:disabled){color:var(--danger)}
+
+/* skeletons */
+@keyframes shim{0%{background-position:200% 0}100%{background-position:-200% 0}}
+.skel{background:linear-gradient(90deg,var(--skel-a),var(--skel-b),var(--skel-a));
+  background-size:200% 100%;animation:shim 1.35s linear infinite;border-radius:6px}
+@media (prefers-reduced-motion:reduce){.skel,.dname.pending{animation:none}}
+.skel-card{padding:12px}
+.skel-line{height:11px;margin-top:9px}
+
+/* ─────────────────────────────────────────────────────────────
+   profile
+   ───────────────────────────────────────────────────────────── */
+.banner{
+  height:132px;width:100%;background:linear-gradient(135deg,var(--g1),var(--g2));
+  position:relative;overflow:hidden;border-radius:var(--radius) var(--radius) 0 0;
+}
+.banner img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .25s}
+.banner img.on{opacity:1}
+.pf{background:var(--surface);border:1px solid var(--line-soft);border-radius:var(--radius);overflow:hidden;margin-bottom:10px}
+.pf-body{padding:0 14px 14px}
+.pf-top{display:flex;align-items:flex-end;justify-content:space-between;margin-top:-30px;margin-bottom:10px;gap:10px}
+.pf-name{font-size:19px;font-weight:680;letter-spacing:-.015em;line-height:1.25;min-height:24px}
+.pf-name.pending{display:inline-block;width:160px;height:15px;border-radius:6px;
+  background:linear-gradient(90deg,var(--skel-a),var(--skel-b),var(--skel-a));background-size:200% 100%;animation:shim 1.35s linear infinite}
+.pf-about{white-space:pre-wrap;overflow-wrap:anywhere;color:var(--text);font-size:14px;line-height:1.55;margin-top:9px}
+.pf-meta{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;margin-top:8px;font-size:12.5px;color:var(--faint)}
+.chip{
+  display:inline-flex;align-items:center;gap:5px;height:23px;padding:0 8px;border-radius:7px;
+  background:var(--surface-2);border:1px solid var(--line);color:var(--dim);font-size:12px;
+}
+.chip svg{width:12px;height:12px}
+.chip.warn{color:var(--dim)}
+.chip.muted-flag{background:var(--danger-soft);border-color:transparent;color:var(--danger)}
+
+.tabs{display:flex;gap:2px;padding:4px;background:var(--surface-2);border-radius:10px;margin:12px 0 10px}
+.tab{
+  flex:1 1 0;min-width:0;height:30px;border-radius:7px;font-size:13px;font-weight:550;color:var(--dim);
+  display:flex;align-items:center;justify-content:center;gap:5px;
+  transition:background .13s,color .13s;white-space:nowrap;overflow:hidden;
+}
+.tab[aria-selected="true"]{background:var(--surface);color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,.15)}
+.tab:disabled{opacity:.45;cursor:not-allowed}
+.tab .soon{font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:var(--faint);flex:0 0 auto}
+
+/* ─────────────────────────────────────────────────────────────
+   thread
+   ───────────────────────────────────────────────────────────── */
+.thread-root{border-color:var(--line)}
+.replies-hd{
+  display:flex;align-items:center;gap:8px;margin:16px 2px 8px;
+  color:var(--faint);font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;
+}
+.replies-hd .rule{flex:1 1 auto;height:1px;background:var(--line-soft)}
+.reply-card{margin-left:14px;position:relative}
+.reply-card::before{
+  content:"";position:absolute;left:-14px;top:0;bottom:0;width:1px;background:var(--line-soft);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   sheets / dialogs
+   ───────────────────────────────────────────────────────────── */
+.backdrop{
+  position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.55);
+  display:flex;align-items:flex-end;justify-content:center;
+  animation:fade .14s ease;
+}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+.sheet{
+  width:100%;max-width:440px;background:var(--surface);
+  border:1px solid var(--line);border-bottom:0;
+  border-radius:16px 16px 0 0;box-shadow:var(--shadow);
+  max-height:82vh;display:flex;flex-direction:column;
+  animation:rise .2s cubic-bezier(.22,.61,.36,1);
+  padding-bottom:env(safe-area-inset-bottom);
+}
+@keyframes rise{from{transform:translateY(14px);opacity:.6}to{transform:none;opacity:1}}
+@media (min-width:640px){
+  .backdrop{align-items:center}
+  .sheet{border-radius:16px;border-bottom:1px solid var(--line);max-height:76vh}
+  @keyframes rise{from{transform:scale(.985);opacity:0}to{transform:none;opacity:1}}
+}
+@media (prefers-reduced-motion:reduce){.sheet,.backdrop{animation:none}}
+.sheet-hd{
+  display:flex;align-items:center;gap:10px;padding:14px 14px 10px;flex:0 0 auto;
+}
+.sheet-title{font-weight:640;font-size:15px;letter-spacing:-.01em;flex:1 1 auto;min-width:0}
+.sheet-body{padding:0 8px 10px;overflow-y:auto;overscroll-behavior:contain}
+.sheet-body.pad{padding:0 14px 14px}
+
+.menu-item{
+  display:flex;align-items:center;gap:11px;width:100%;padding:10px 10px;border-radius:10px;
+  text-align:left;color:var(--text);font-size:14px;transition:background .12s;
+}
+.menu-item:hover:not(:disabled){background:var(--surface-2)}
+.menu-item:disabled{cursor:not-allowed;color:var(--faint)}
+.menu-item svg{width:17px;height:17px;flex:0 0 auto;color:var(--dim)}
+.menu-item:disabled svg{opacity:.5}
+.menu-item.danger{color:var(--danger)}
+.menu-item.danger svg{color:var(--danger)}
+.menu-item .ml{flex:1 1 auto;min-width:0}
+.badge{
+  font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;
+  padding:2px 6px;border-radius:5px;background:var(--surface-3);color:var(--faint);flex:0 0 auto;
+}
+.menu-sep{height:1px;background:var(--line-soft);margin:6px 10px}
+.menu-note{padding:6px 12px 8px;color:var(--faint);font-size:11.5px;line-height:1.45}
+
+/* composer */
+.composer{padding:0 14px 14px}
+.ctx-quote{
+  border-left:2px solid var(--line);padding:2px 0 2px 10px;margin-bottom:11px;
+  color:var(--dim);font-size:13px;line-height:1.5;max-height:88px;overflow:hidden;
+  white-space:pre-wrap;overflow-wrap:anywhere;
+}
+textarea.ta{
+  width:100%;min-height:110px;max-height:34vh;resize:vertical;padding:11px 12px;
+  background:var(--surface-2);border:1px solid var(--line);border-radius:11px;
+  color:var(--text);font:inherit;line-height:1.5;
+}
+textarea.ta:focus{outline:none;border-color:var(--accent)}
+.row-end{display:flex;align-items:center;gap:10px;justify-content:flex-end;margin-top:11px}
+.hint{color:var(--faint);font-size:12px;margin-right:auto}
+.btn{
+  height:34px;padding:0 15px;border-radius:9px;font-size:13.5px;font-weight:600;
+  background:var(--surface-2);border:1px solid var(--line);color:var(--text);
+  transition:background .13s,opacity .13s;
+}
+.btn:hover:not(:disabled){background:var(--surface-3)}
+.btn.primary{background:var(--accent);border-color:transparent;color:var(--accent-ink)}
+.btn.primary:hover:not(:disabled){filter:brightness(1.07)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* emoji picker */
+.emoji-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;padding:2px 6px 6px}
+.emoji-btn{
+  height:54px;border-radius:11px;background:var(--surface-2);border:1px solid var(--line);
+  font-size:23px;display:grid;place-items:center;transition:transform .1s,background .13s;
+}
+.emoji-btn:hover{background:var(--surface-3);transform:translateY(-1px)}
+.emoji-btn small{display:block;font-size:10px;color:var(--faint);margin-top:1px}
+.emoji-btn.txt{font-size:19px;font-weight:700}
+
+/* relay editor */
+.relay-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--line-soft)}
+.relay-url{flex:1 1 auto;min-width:0;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+input.inp{
+  width:100%;height:34px;padding:0 11px;background:var(--surface-2);border:1px solid var(--line);
+  border-radius:9px;color:var(--text);font:inherit;font-size:13px;
+}
+input.inp:focus{outline:none;border-color:var(--accent)}
+
+/* privacy panel */
+.prose{font-size:13.5px;line-height:1.6;color:var(--dim)}
+.prose strong{color:var(--text);font-weight:600}
+.prose h4{margin:15px 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:.07em;color:var(--faint);font-weight:650}
+.prose ul{margin:6px 0;padding-left:17px}
+.prose li{margin:3px 0}
+.prose code{
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+  background:var(--surface-2);padding:1px 5px;border-radius:5px;color:var(--text);
+}
+pre.json{
+  margin:8px 0 0;padding:10px;background:var(--surface-2);border:1px solid var(--line);
+  border-radius:10px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;
+  line-height:1.5;overflow:auto;max-height:230px;color:var(--dim);white-space:pre;
+}
+
+/* toasts */
+#toasts{
+  position:fixed;left:0;right:0;bottom:0;z-index:80;display:flex;flex-direction:column;
+  align-items:center;gap:8px;padding:0 12px 18px;padding-bottom:calc(18px + env(safe-area-inset-bottom));
+  pointer-events:none;
+}
+.toast{
+  display:flex;align-items:center;gap:10px;max-width:440px;width:100%;
+  background:var(--surface-3);border:1px solid var(--line);border-radius:11px;
+  padding:10px 12px;font-size:13.5px;box-shadow:var(--shadow);pointer-events:auto;
+  animation:rise .18s cubic-bezier(.22,.61,.36,1);
+}
+.toast.err{border-color:var(--danger);color:var(--text)}
+.toast .tt{flex:1 1 auto;min-width:0}
+.toast button{font-size:13px;font-weight:650;color:var(--accent);white-space:nowrap;flex:0 0 auto}
+
+/* misc */
+.empty{
+  text-align:center;padding:44px 20px;color:var(--faint);font-size:13.5px;line-height:1.6;
+}
+.empty svg{width:26px;height:26px;margin:0 auto 10px;color:var(--line)}
+.loading-line{
+  display:flex;align-items:center;gap:8px;justify-content:center;
+  padding:16px;color:var(--faint);font-size:12.5px;
+}
+.spin{width:13px;height:13px;border:2px solid var(--line);border-top-color:var(--accent);
+  border-radius:50%;animation:sp .7s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.sect-hd{
+  color:var(--faint);font-size:11.5px;font-weight:650;text-transform:uppercase;
+  letter-spacing:.08em;margin:4px 2px 9px;display:flex;align-items:center;gap:8px;
+}
+.sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+</style>
+</head>
+<body>
+<div id="app">
+  <header class="topbar">
+    <button class="icon-btn" id="back-btn" hidden aria-label="Back"></button>
+    <div class="brand"><span class="egg" id="brand-egg"></span><span>hatchling</span></div>
+    <div class="crumb" id="crumb" hidden></div>
+    <div class="grow"></div>
+    <button class="icon-btn" id="privacy-btn" aria-label="What leaves this device" title="What leaves this device"></button>
+    <button class="icon-btn" id="relays-btn" aria-label="Relays" title="Relays"></button>
+    <button class="signer-btn" id="signer-btn" data-state="disconnected">
+      <span class="dot"></span><span class="lbl">Connect</span>
+    </button>
+  </header>
+  <main id="views"></main>
+</div>
+<div id="toasts" role="status" aria-live="polite"></div>
+<div id="sheet-root"></div>
+<script type="module">
+import { SimplePool, nip19 } from 'https://esm.sh/nostr-tools@2.10.4';
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   hatchling — M1 (feed)
+
+   Build order is SPEC.md §8. This file implements M1 and nothing past it:
+   signer, mock DVM, relay pool, feed / thread / profile, view stack,
+   reply, react, mute, not-interested, telemetry capture + flush.
+
+   Two things here are load-bearing and must not be worked around
+   (SPEC.md §3): the Signer interface (§3.1) and the action registry (§3.3).
+   Everything else in this file is disposable.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── config ─────────────────────────────────────────────────────────────── */
+
+// SPEC §3.2 — the real endpoint lives behind this single const. M3 points it
+// at Rookery; until then MockDvm is used and this is never dialled.
+const DVM_BASE_URL = 'https://rookery.invalid/v0';
+
+// SPEC §4 — default read set, user-editable and persisted.
+const DEFAULT_RELAYS = [
+  'wss://relay.damus.io',
+  'wss://nos.lol',
+  'wss://relay.primal.net',
+];
+
+// SPEC §7 — anonymous by default. There is deliberately no UI to flip this.
+const shareIdentity = false;
+
+const FLUSH_INTERVAL_MS = 30_000;   // SPEC §7
+const NOTES_PER_CANDIDATE = 2;
+const FEED_FIRST_PAINT_MS = 1400;   // paint the first batch by here, come what may
+const FEED_SETTLE_MS = 6000;        // keep taking late arrivals until here
+
+const LS = {
+  relays:    'hatchling.relays.v1',
+  muted:     'hatchling.muted.v1',
+  dismissed: 'hatchling.dismissed.v1',
+  telemetry: 'hatchling.telemetry.v1',
+  autoconn:  'hatchling.autoconnect.v1',
+};
+
+/* ── tiny helpers ───────────────────────────────────────────────────────── */
+
+const $ = (sel, root = document) => root.querySelector(sel);
+
+function el(tag, props = {}, ...kids) {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(props)) {
+    if (v == null || v === false) continue;
+    if (k === 'class') n.className = v;
+    else if (k === 'text') n.textContent = v;
+    else if (k === 'html') n.innerHTML = v;              // only ever our own markup
+    else if (k === 'style') n.setAttribute('style', v);
+    else if (k.startsWith('on')) n.addEventListener(k.slice(2), v);
+    else if (v === true) n.setAttribute(k, '');
+    else n.setAttribute(k, v);
+  }
+  for (const kid of kids.flat()) {
+    if (kid == null || kid === false) continue;
+    n.append(kid.nodeType ? kid : document.createTextNode(String(kid)));
+  }
+  return n;
+}
+
+function lsGet(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw == null ? fallback : JSON.parse(raw);
+  } catch { return fallback; }
+}
+function lsSet(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* quota / private mode */ }
+}
+
+const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
+
+function relTime(unix) {
+  const s = Math.max(0, Math.floor(Date.now() / 1000 - unix));
+  if (s < 45) return 'now';
+  if (s < 3600) return Math.floor(s / 60) + 'm';
+  if (s < 86400) return Math.floor(s / 3600) + 'h';
+  if (s < 2592000) return Math.floor(s / 86400) + 'd';
+  if (s < 31536000) return Math.floor(s / 2592000) + 'mo';
+  return Math.floor(s / 31536000) + 'y';
+}
+
+function npubOf(pubkey) {
+  try { return nip19.npubEncode(pubkey); } catch { return pubkey; }
+}
+function shortNpub(pubkey) {
+  const s = npubOf(pubkey);
+  return s.length > 20 ? s.slice(0, 10) + '…' + s.slice(-5) : s;
+}
+
+// Deterministic avatar/banner colours, so a placeholder is stable and the
+// swap to a real image is a cross-fade rather than a colour pop.
+function gradientFor(pubkey) {
+  let h = 0;
+  for (let i = 0; i < pubkey.length; i += 2) h = (h * 31 + parseInt(pubkey.substr(i, 2), 16)) % 360;
+  const a = h, b = (h + 48) % 360;
+  return `--g1:hsl(${a} 42% 34%);--g2:hsl(${b} 38% 22%)`;
+}
+
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    try {
+      const ta = el('textarea', { style: 'position:fixed;opacity:0' });
+      ta.value = text;
+      document.body.append(ta); ta.select();
+      const ok = document.execCommand('copy');
+      ta.remove();
+      return ok;
+    } catch { return false; }
+  }
+}
+
+/* ── icons (16px stroke, currentColor) ──────────────────────────────────── */
+
+const svg = (d, extra = '') =>
+  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+        stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}${extra}</svg>`;
+
+const I = {
+  egg:      svg('<path d="M12 3c3.5 0 6.5 5 6.5 9a6.5 6.5 0 0 1-13 0c0-4 3-9 6.5-9Z"/>'),
+  back:     svg('<path d="M15 5l-7 7 7 7"/>'),
+  more:     svg('<circle cx="5" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.4" fill="currentColor" stroke="none"/>'),
+  reply:    svg('<path d="M21 11.5a8.4 8.4 0 0 1-8.5 8.5 8.7 8.7 0 0 1-3.9-.9L3 21l1.9-5.4A8.5 8.5 0 1 1 21 11.5Z"/>'),
+  react:    svg('<circle cx="12" cy="12" r="9"/><path d="M8.5 14.5a4.5 4.5 0 0 0 7 0"/><path d="M9 9.5h.01M15 9.5h.01"/>'),
+  thread:   svg('<path d="M4 6h16M4 12h11M4 18h7"/>'),
+  user:     svg('<circle cx="12" cy="8" r="3.5"/><path d="M4.5 20a7.5 7.5 0 0 1 15 0"/>'),
+  zap:      svg('<path d="M13 2 4.5 13.5H11l-1 8.5L19.5 10H13l0-8Z"/>'),
+  repost:   svg('<path d="M17 2l3 3-3 3"/><path d="M20 5H8a4 4 0 0 0-4 4v1"/><path d="M7 22l-3-3 3-3"/><path d="M4 19h12a4 4 0 0 0 4-4v-1"/>'),
+  context:  svg('<path d="M9 18l6-6-6-6"/><path d="M4 4v6a4 4 0 0 0 4 4h7"/>'),
+  copy:     svg('<rect x="9" y="9" width="11" height="11" rx="2.5"/><path d="M5 15V6a2 2 0 0 1 2-2h8"/>'),
+  code:     svg('<path d="M8.5 8 4 12l4.5 4M15.5 8 20 12l-4.5 4"/>'),
+  bookmark: svg('<path d="M6 4.5h12v16l-6-4.5-6 4.5v-16Z"/>'),
+  mute:     svg('<path d="M11 5 6.5 9H3v6h3.5L11 19V5Z"/><path d="m16 9 5 6M21 9l-5 6"/>'),
+  hide:     svg('<path d="M3 3l18 18"/><path d="M10.6 6.3A9.6 9.6 0 0 1 12 6.2c5 0 9 5.8 9 5.8a17 17 0 0 1-2.5 3.1M6.4 7.7A16.6 16.6 0 0 0 3 12s4 5.8 9 5.8a8.6 8.6 0 0 0 3.2-.6"/><path d="M9.9 10a3 3 0 0 0 4.2 4.2"/>'),
+  flag:     svg('<path d="M5 21V4h13l-2.5 4L18 12H5"/>'),
+  share:    svg('<path d="M12 15V4"/><path d="m8 8 4-4 4 4"/><path d="M5 13v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5"/>'),
+  follow:   svg('<circle cx="10" cy="8" r="3.5"/><path d="M3.5 20a6.5 6.5 0 0 1 13 0"/><path d="M18 8v6M21 11h-6"/>'),
+  unfollow: svg('<circle cx="10" cy="8" r="3.5"/><path d="M3.5 20a6.5 6.5 0 0 1 13 0"/><path d="M21 11h-6"/>'),
+  watch:    svg('<path d="M12 3.5 14.6 9l6 .9-4.3 4.2 1 6-5.3-2.8L6.7 20l1-6L3.4 9.9 9.4 9 12 3.5Z"/>'),
+  check:    svg('<path d="M20 6 9 17l-5-5"/>'),
+  sparkle:  svg('<path d="M12 3.6 13.7 9l5.4 1.7-5.4 1.7L12 17.8l-1.7-5.4L4.9 10.7 10.3 9 12 3.6Z"/>'),
+  relay:    svg('<circle cx="12" cy="12" r="2.5"/><path d="M6.8 6.8a7.3 7.3 0 0 0 0 10.4M17.2 17.2a7.3 7.3 0 0 0 0-10.4"/><path d="M3.7 3.7a11.7 11.7 0 0 0 0 16.6M20.3 20.3a11.7 11.7 0 0 0 0-16.6"/>'),
+  shield:   svg('<path d="M12 3 5 6v6c0 4.2 2.9 7.7 7 9 4.1-1.3 7-4.8 7-9V6l-7-3Z"/>'),
+  x:        svg('<path d="M6 6l12 12M18 6 6 18"/>'),
+  trash:    svg('<path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13"/>'),
+  plus:     svg('<path d="M12 5v14M5 12h14"/>'),
+  inbox:    svg('<path d="M4 13h4l1.5 3h5L16 13h4"/><path d="M4 13 6.5 5h11L20 13v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-5Z"/>'),
+  link:     svg('<path d="M10 13.5a4 4 0 0 0 5.7 0l2.8-2.8a4 4 0 1 0-5.7-5.7L11.5 6.3"/><path d="M14 10.5a4 4 0 0 0-5.7 0l-2.8 2.8a4 4 0 1 0 5.7 5.7l1.3-1.3"/>'),
+};
+
+/* ── plain-text content rendering (SPEC §5) ─────────────────────────────────
+   Escape all user content, linkify bare URLs, no media embeds, no markdown.
+   User text only ever reaches the DOM as a text node — there is no innerHTML
+   path here at all, so escaping is structural rather than a function call.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+// A bare URL, or a bare `nostr:` bech32 entity. The latter is not linked or
+// resolved — that is NIP-27 rendering and out of scope — but a 300-character
+// identifier sitting in the middle of a note destroys the card it is in, so
+// it is elided down to something a reader can skim past. Still plain text;
+// the full value is on the element's title.
+const TOKEN_RE =
+  /\b(?:https?:\/\/|www\.)[^\s<>()"']+[^\s<>()"'.,;:!?]|\bnostr:(?:npub|nprofile|note|nevent|naddr)1[02-9ac-hj-np-z]{20,}/gi;
+
+function renderContentInto(node, text) {
+  node.textContent = '';
+  const src = String(text ?? '');
+  let last = 0;
+  for (const m of src.matchAll(TOKEN_RE)) {
+    if (m.index > last) node.append(document.createTextNode(src.slice(last, m.index)));
+    const raw = m[0];
+    if (/^nostr:/i.test(raw)) {
+      node.append(el('span', {
+        class: 'entity',
+        title: raw,
+        text: raw.length > 30 ? raw.slice(0, 20) + '…' + raw.slice(-6) : raw,
+      }));
+    } else {
+      const href = raw.startsWith('www.') ? 'https://' + raw : raw;
+      let shown = raw.replace(/^https?:\/\//, '');
+      if (shown.length > 44) shown = shown.slice(0, 41) + '…';
+      node.append(el('a', {
+        href, target: '_blank', rel: 'noopener noreferrer nofollow ugc',
+        text: shown,
+        onclick: (e) => e.stopPropagation(),
+      }));
+    }
+    last = m.index + raw.length;
+  }
+  if (last < src.length) node.append(document.createTextNode(src.slice(last)));
+  return node;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SPEC §3.1 — Signer
+
+     interface Signer {
+       getPublicKey(): Promise<string>          // hex pubkey
+       signEvent(unsigned): Promise<SignedEvent>
+     }
+
+   `window.nostr` is touched in exactly one place: inside Nip07Signer, below.
+   NIP-07 extensions do not exist on mobile; NIP-46 remote signing (M4) is a
+   second implementation of this interface and nothing else. If the interface
+   leaks, mobile support becomes a rewrite instead of one new file.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+class Nip07Signer {
+  /** The only `window.nostr` reference in the codebase. */
+  static get provider() { return globalThis.window?.nostr ?? null; }
+  static isAvailable() { return !!Nip07Signer.provider; }
+
+  async getPublicKey() {
+    const p = Nip07Signer.provider;
+    if (!p) throw new Error('No NIP-07 signer extension found.');
+    const pk = await p.getPublicKey();
+    if (typeof pk !== 'string' || !/^[0-9a-f]{64}$/i.test(pk)) {
+      throw new Error('Signer returned a malformed public key.');
+    }
+    return pk.toLowerCase();
+  }
+
+  async signEvent(unsigned) {
+    const p = Nip07Signer.provider;
+    if (!p) throw new Error('No NIP-07 signer extension found.');
+    const signed = await p.signEvent(unsigned);
+    if (!signed?.id || !signed?.sig) throw new Error('Signer returned an unsigned event.');
+    return signed;
+  }
+}
+
+/* All UI reads this one state: disconnected | connecting | connected. */
+const signer = {
+  impl: new Nip07Signer(),
+  state: 'disconnected',
+  pubkey: null,
+  _subs: new Set(),
+  onChange(fn) { this._subs.add(fn); return () => this._subs.delete(fn); },
+  _set(state, pubkey = null) {
+    this.state = state;
+    this.pubkey = pubkey;
+    for (const fn of this._subs) { try { fn(state, pubkey); } catch (e) { console.error(e); } }
+  },
+  get connected() { return this.state === 'connected'; },
+
+  async connect({ silent = false } = {}) {
+    if (this.state === 'connecting') return false;
+    if (!Nip07Signer.isAvailable()) {
+      if (!silent) {
+        toast('No NIP-07 extension found. Install one (Alby, nos2x, …) to sign.', { error: true, ms: 6000 });
+      }
+      return false;
+    }
+    this._set('connecting');
+    try {
+      const pk = await this.impl.getPublicKey();
+      this._set('connected', pk);
+      lsSet(LS.autoconn, true);
+      if (!silent) toast('Connected as ' + shortNpub(pk));
+      loadMuteListForUser();      // seed the hard mute filter (SPEC §6)
+      return true;
+    } catch (e) {
+      this._set('disconnected');
+      if (!silent) toast(e?.message || 'Could not reach the signer.', { error: true });
+      return false;
+    }
+  },
+
+  disconnect() {
+    lsSet(LS.autoconn, false);
+    this._set('disconnected');
+    toast('Disconnected. Nothing was published.');
+  },
+
+  /** Stamp, sign and return an event. Every publish path goes through here. */
+  async sign(unsigned) {
+    if (!this.connected) throw new Error('Not connected to a signer.');
+    return this.impl.signEvent({
+      kind: unsigned.kind,
+      created_at: unsigned.created_at ?? Math.floor(Date.now() / 1000),
+      tags: unsigned.tags ?? [],
+      content: unsigned.content ?? '',
+      pubkey: this.pubkey,
+    });
+  },
+};
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SPEC §3.2 — DVM client
+
+     fetchCandidates({ limit }): Promise<Candidate[]>
+       Candidate = { pubkey, reason, sampleEventIds }
+     reportOutcomes(batch): Promise<void>
+
+   v0 transport is plain HTTP POST, not nostr events. M1 runs on MockDvm.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+class MockDvm {
+  constructor() { this.baseUrl = DVM_BASE_URL; }
+
+  async fetchCandidates({ limit = 20 } = {}) {
+    return MOCK_CANDIDATES.slice(0, limit).map((c) => ({
+      pubkey: c.pubkey,
+      reason: c.reason,
+      sampleEventIds: [],           // real Rookery pins specific notes here
+    }));
+  }
+
+  async reportOutcomes(batch) {
+    console.groupCollapsed(
+      `%c[hatchling] reportOutcomes → ${this.baseUrl}/outcomes  (${batch.length} record${batch.length === 1 ? '' : 's'})`,
+      'color:#f2a93b',
+    );
+    console.table(batch.map((r) => ({
+      candidate: shortNpub(r.candidate_pubkey),
+      dwell_ms: r.dwell_ms,
+      ...Object.fromEntries(Object.entries(r).filter(([k, v]) => v === true && k !== 'shown')),
+    })));
+    console.log(JSON.stringify(batch, null, 2));
+    console.groupEnd();
+  }
+}
+
+/* Hardcoded candidates. Reasons read the way Rookery's will. */
+const MOCK_CANDIDATES = [
+  { pubkey: '6e468422dfb74a5738702a8823b9b28168abab8655faacb6853cd0ee15deee93',
+    reason: 'Reactions from accounts that rarely react. High signal-to-volume ratio this week.' },
+  { pubkey: '97c70a44366a6535c145b333f973ea86dfdc2d7a99da618c40c64705ad98e322',
+    reason: 'Rising outside your follow graph — no path shorter than 3 hops.' },
+  { pubkey: 'eab0e756d32b80bcd464f3d844b8040303075a13eabc3599a762c9ac7ab91f4f',
+    reason: 'Consistently zapped by discriminating zappers rather than broadly reacted to.' },
+  { pubkey: '460c25e682fda7832b52d1f22d3d22b3176d972f60dcdc3212ed8c92ef85065c',
+    reason: 'Replies draw longer threads than the median for their reach.' },
+  { pubkey: 'fa984bd7dbb282f07e16e7ae87b26a2a7b9b90b7246a44771f0cf5ae58018f52',
+    reason: 'Traction accelerating from a small base — the shape new accounts have.' },
+  { pubkey: '04c915daefee38317fa734444acee390a8269fe5810b2241e5e6dd343dfbecc9',
+    reason: 'Reacted to by five accounts you have bookmarked, none of whom follow each other.' },
+  { pubkey: '3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d',
+    reason: 'Low posting volume, unusually high per-note engagement.' },
+  { pubkey: '82341f882b6eabcd2ba7f1ef90aad961cf074af15b9ef44a09f9d2a8fbfbe6a2',
+    reason: 'Surfaced by reactor overlap with three accounts you opened last week.' },
+];
+
+const dvm = new MockDvm();
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SPEC §7 — Telemetry.  The point of the whole application.
+
+   Collection: per candidate pubkey, via IntersectionObserver and action
+   handlers. Buffered in memory, mirrored to localStorage so a refresh loses
+   nothing. Flushed every 30s and on visibilitychange.
+
+   Records are cumulative and idempotent: a flush sends the record's full
+   current value, so a dropped or duplicated batch costs nothing (booleans are
+   monotonic, dwell_ms is a running total). Rookery takes last-write-wins.
+
+   Never included: the user's pubkey (shareIdentity is false and has no UI),
+   note content, reply text, relay list, follow list, or any timestamp finer
+   than the batch itself.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+const TELEMETRY_FIELDS = {
+  shown: false,
+  dwell_ms: 0,
+  opened: false,
+  opened_profile: false,
+  profile_notes_scrolled: 0,
+  viewed_engagement: false,
+  viewed_context: false,
+  viewed_raw: false,
+  copied_nevent: false,
+  reacted: false,
+  replied: false,
+  bookmarked: false,
+  watchlisted: false,
+  followed: false,
+  unfollowed: false,
+  zapped: false,
+  not_interested: false,
+  muted: false,
+};
+
+const telemetry = {
+  records: new Map(),   // pubkey -> record
+  dirty: new Set(),
+  _open: new Map(),     // pubkey -> ms timestamp the card became visible
+  _saveTimer: null,
+
+  load() {
+    const saved = lsGet(LS.telemetry, null);
+    if (!saved || !Array.isArray(saved.records)) return;
+    for (const rec of saved.records) {
+      if (!rec?.candidate_pubkey) continue;
+      const clean = { candidate_pubkey: rec.candidate_pubkey, ...TELEMETRY_FIELDS };
+      for (const k of Object.keys(TELEMETRY_FIELDS)) {
+        if (k in rec) clean[k] = rec[k];
+      }
+      this.records.set(rec.candidate_pubkey, clean);
+    }
+    // Only records that had not been flushed when the tab closed are still
+    // owed to the DVM. Re-sending the rest on every refresh would be noise.
+    for (const pk of saved.dirty || []) {
+      if (this.records.has(pk)) this.dirty.add(pk);
+    }
+  },
+
+  save() {
+    clearTimeout(this._saveTimer);
+    this._saveTimer = setTimeout(() => {
+      this._evict();
+      lsSet(LS.telemetry, { v: 1, records: [...this.records.values()], dirty: [...this.dirty] });
+    }, 400);
+  },
+
+  /** Flushed records are kept only to keep booleans monotonic; cap the tail. */
+  _evict(max = 400) {
+    if (this.records.size <= max) return;
+    for (const pk of this.records.keys()) {
+      if (this.records.size <= max) break;
+      if (!this.dirty.has(pk)) this.records.delete(pk);
+    }
+  },
+
+  record(pubkey) {
+    let r = this.records.get(pubkey);
+    if (!r) {
+      r = { candidate_pubkey: pubkey, ...TELEMETRY_FIELDS };
+      this.records.set(pubkey, r);
+    }
+    return r;
+  },
+
+  /** Set a field. Booleans are monotonic unless explicitly unset (undo). */
+  mark(pubkey, field, value = true) {
+    if (!pubkey || !(field in TELEMETRY_FIELDS)) return;
+    const r = this.record(pubkey);
+    if (r[field] === value) return;
+    r[field] = value;
+    this.dirty.add(pubkey);
+    this.save();
+  },
+
+  bump(pubkey, field, by = 1) {
+    if (!pubkey || !(field in TELEMETRY_FIELDS)) return;
+    const r = this.record(pubkey);
+    r[field] = (r[field] || 0) + by;
+    this.dirty.add(pubkey);
+    this.save();
+  },
+
+  /* dwell — only accrues while the card is ≥50% visible AND the tab is
+     foregrounded. Time spent on a backgrounded tab is not attention. */
+  enter(pubkey) {
+    if (this._open.has(pubkey)) return;
+    this.mark(pubkey, 'shown', true);
+    this._open.set(pubkey, performance.now());
+  },
+  leave(pubkey) {
+    const t0 = this._open.get(pubkey);
+    if (t0 == null) return;
+    this._open.delete(pubkey);
+    const ms = Math.round(performance.now() - t0);
+    if (ms >= 120) this.bump(pubkey, 'dwell_ms', clamp(ms, 0, 600_000));
+  },
+  bankAll() { for (const pk of [...this._open.keys()]) this.leave(pk); },
+
+  async flush(reason = 'interval') {
+    this.bankAll();
+    if (!this.dirty.size) return;
+    const keys = [...this.dirty];
+    const batch = keys.map((k) => ({ ...this.records.get(k) }));
+    // shareIdentity is false in v0 — this branch exists so the omission is a
+    // decision in the code rather than an oversight.
+    if (shareIdentity && signer.pubkey) for (const r of batch) r.reporter_pubkey = signer.pubkey;
+    try {
+      await dvm.reportOutcomes(batch);
+      for (const k of keys) this.dirty.delete(k);
+      this.save();
+    } catch (e) {
+      console.warn('[hatchling] flush failed, keeping buffer for retry:', reason, e);
+    }
+  },
+
+  /** What the next flush would send — shown verbatim in the privacy panel. */
+  preview() {
+    return [...this.dirty].map((k) => this.records.get(k)).filter(Boolean);
+  },
+};
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SPEC §4 — relays
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+const pool = new SimplePool();
+
+let relays = (() => {
+  const saved = lsGet(LS.relays, null);
+  const ok = Array.isArray(saved) ? saved.filter(isRelayUrl) : [];
+  return ok.length ? ok : [...DEFAULT_RELAYS];
+})();
+
+function isRelayUrl(u) { return typeof u === 'string' && /^wss?:\/\/[^\s]+$/i.test(u.trim()); }
+function setRelays(next) {
+  relays = next.length ? next : [...DEFAULT_RELAYS];
+  lsSet(LS.relays, relays);
+}
+/** Relay hints for nevent/nprofile encoding and NIP-10 `e` tags. */
+function hints() { return relays.slice(0, 2); }
+
+/** One subscription, many filters — relays apply `limit` per filter. */
+function subscribe(filters, { onevent, oneose, maxWait = 8000 } = {}) {
+  return pool.subscribeMany(relays, filters, { onevent, oneose, maxWait });
+}
+
+/** Per-relay query that can tell "nothing there" apart from "never answered". */
+function queryRelay(url, filter, timeoutMs = 5000) {
+  return new Promise((resolve) => {
+    const events = [];
+    let eosed = false, done = false, sub = null;
+    const finish = (ok) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      try { sub?.close(); } catch { /* already closed */ }
+      resolve({ url, ok, events });
+    };
+    const timer = setTimeout(() => finish(eosed), timeoutMs);
+    try {
+      sub = pool.subscribeMany([url], [filter], {
+        onevent: (e) => events.push(e),
+        oneose: () => { eosed = true; finish(true); },
+        onclose: () => finish(eosed),
+      });
+    } catch { finish(false); }
+  });
+}
+
+/**
+ * SPEC §6 — read-modify-write for NIP-51 replaceable lists.
+ * Returns { ok, event }. `ok` is false unless at least one relay actually
+ * answered; a caller must never build a list on top of `ok:false`.
+ */
+async function fetchLatestReplaceable(kind, pubkey) {
+  const results = await Promise.all(
+    relays.map((u) => queryRelay(u, { kinds: [kind], authors: [pubkey], limit: 1 })),
+  );
+  const ok = results.some((r) => r.ok);
+  let latest = null;
+  for (const r of results) {
+    for (const ev of r.events) {
+      if (ev.kind !== kind || ev.pubkey !== pubkey) continue;
+      if (!latest || ev.created_at > latest.created_at) latest = ev;
+    }
+  }
+  return { ok, event: latest };
+}
+
+/** Sign + publish. Resolves once at least one relay accepts. */
+async function publish(unsigned) {
+  const signed = await signer.sign(unsigned);
+  const results = await Promise.allSettled(pool.publish(relays, signed));
+  const accepted = results.filter((r) => r.status === 'fulfilled').length;
+  if (!accepted) {
+    const why = results.find((r) => r.status === 'rejected')?.reason;
+    throw new Error('No relay accepted the event' + (why ? ` (${String(why).slice(0, 90)})` : '') + '.');
+  }
+  return { event: signed, accepted, total: relays.length };
+}
+
+/* ── NIP-10 ─────────────────────────────────────────────────────────────────
+   Marked form first; falls back to the deprecated positional form, which
+   plenty of clients still emit.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+function parseNip10(tags = []) {
+  const eTags = tags.filter((t) => t[0] === 'e' && t[1]);
+  const pTags = tags.filter((t) => t[0] === 'p' && t[1]);
+  let root = null, reply = null;
+
+  const marked = eTags.filter((t) => t[3] === 'root' || t[3] === 'reply');
+  if (marked.length) {
+    root = eTags.find((t) => t[3] === 'root') || null;
+    reply = eTags.find((t) => t[3] === 'reply') || null;
+    if (!reply) reply = root;          // direct reply to the root
+    if (!root) root = reply;
+  } else if (eTags.length === 1) {
+    root = reply = eTags[0];
+  } else if (eTags.length > 1) {
+    root = eTags[0];                   // deprecated positional: first = root,
+    reply = eTags[eTags.length - 1];   // last = immediate parent
+  }
+  return { root, reply, eTags, pTags };
+}
+
+const isReply = (ev) => !!parseNip10(ev.tags).reply;
+
+function isDirectReplyTo(ev, id) {
+  const { reply, root } = parseNip10(ev.tags);
+  return reply ? reply[1] === id : root?.[1] === id;
+}
+
+/** Tags for a kind 1 replying to `parent`, per NIP-10 marked form. */
+function replyTagsFor(parent) {
+  const p = parseNip10(parent.tags);
+  const hint = hints()[0] || '';
+  const rootId = p.root ? p.root[1] : parent.id;
+  const rootHint = (p.root && p.root[2]) || hint;
+  const tags = [['e', rootId, rootHint, 'root']];
+  if (rootId !== parent.id) tags.push(['e', parent.id, hint, 'reply']);
+  const mentioned = new Set(p.pTags.map((t) => t[1]));
+  mentioned.add(parent.pubkey);
+  if (signer.pubkey) mentioned.delete(signer.pubkey);
+  for (const pk of mentioned) tags.push(['p', pk]);
+  return tags;
+}
+
+function neventFor(ev) {
+  try {
+    return nip19.neventEncode({ id: ev.id, relays: hints(), author: ev.pubkey, kind: ev.kind });
+  } catch { return ev.id; }
+}
+function nprofileFor(pubkey) {
+  try { return nip19.nprofileEncode({ pubkey, relays: hints() }); } catch { return npubOf(pubkey); }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   profile cache (kind 0)
+
+   Every avatar/name in the app binds through here. Bindings write into
+   already-laid-out boxes — fixed-size avatar, fixed-height name line — so a
+   profile resolving never moves anything on screen.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+const profiles = {
+  cache: new Map(),        // pubkey -> metadata object (or null once known-absent)
+  events: new Map(),       // pubkey -> raw kind 0 event
+  _binds: new Map(),       // pubkey -> Set<fn>
+  _pending: new Set(),
+  _timer: null,
+
+  get(pubkey) { return this.cache.get(pubkey) ?? null; },
+
+  bind(pubkey, fn) {
+    if (!this._binds.has(pubkey)) this._binds.set(pubkey, new Set());
+    this._binds.get(pubkey).add(fn);
+    const meta = this.cache.get(pubkey);
+    if (meta !== undefined) fn(meta);
+    else this.request([pubkey]);
+  },
+
+  request(pubkeys) {
+    let added = false;
+    for (const pk of pubkeys) {
+      if (this.cache.has(pk) || this._pending.has(pk)) continue;
+      this._pending.add(pk);
+      added = true;
+    }
+    if (!added) return;
+    clearTimeout(this._timer);
+    this._timer = setTimeout(() => this._go(), 30);   // coalesce a burst
+  },
+
+  _go() {
+    const batch = [...this._pending];
+    this._pending.clear();
+    if (!batch.length) return;
+    const seen = new Set();
+    const sub = subscribe([{ kinds: [0], authors: batch }], {
+      onevent: (ev) => {
+        const prev = this.events.get(ev.pubkey);
+        if (prev && prev.created_at >= ev.created_at) return;
+        this.events.set(ev.pubkey, ev);
+        let meta = {};
+        try { meta = JSON.parse(ev.content) || {}; } catch { /* malformed kind 0 */ }
+        this.cache.set(ev.pubkey, meta);
+        seen.add(ev.pubkey);
+        this._emit(ev.pubkey, meta);
+      },
+      oneose: () => {
+        for (const pk of batch) {
+          if (!this.cache.has(pk)) { this.cache.set(pk, null); this._emit(pk, null); }
+        }
+        setTimeout(() => { try { sub.close(); } catch { /* noop */ } }, 1500);
+      },
+    });
+    setTimeout(() => { try { sub.close(); } catch { /* noop */ } }, 9000);
+  },
+
+  _emit(pubkey, meta) {
+    for (const fn of this._binds.get(pubkey) || []) {
+      try { fn(meta); } catch (e) { console.error(e); }
+    }
+  },
+
+  displayName(pubkey) {
+    const m = this.cache.get(pubkey);
+    const n = (m?.display_name || m?.displayName || m?.name || '').trim();
+    return n || shortNpub(pubkey);
+  },
+};
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SPEC §6 — mute vs. not interested. Kept apart on purpose.
+
+   Mute is hard, permanent and published (kind 10000). It is also a hard
+   client-side filter, independent of anything the DVM returns.
+   Not interested is a soft local dismissal that publishes nothing.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+const muted = new Set(lsGet(LS.muted, []));
+const dismissed = new Set(lsGet(LS.dismissed, []));
+
+const isMuted = (pk) => muted.has(pk);
+const isHidden = (pk) => muted.has(pk) || dismissed.has(pk);
+
+function addMutedLocal(pk) { muted.add(pk); lsSet(LS.muted, [...muted]); }
+function removeMutedLocal(pk) { muted.delete(pk); lsSet(LS.muted, [...muted]); }
+function addDismissed(pk) { dismissed.add(pk); lsSet(LS.dismissed, [...dismissed]); }
+function removeDismissed(pk) { dismissed.delete(pk); lsSet(LS.dismissed, [...dismissed]); }
+
+/** Seed the hard filter from the user's published list once a signer connects. */
+async function loadMuteListForUser() {
+  if (!signer.connected) return;
+  const { ok, event } = await fetchLatestReplaceable(10000, signer.pubkey);
+  if (!ok || !event) return;
+  let changed = false;
+  for (const t of event.tags) {
+    if (t[0] === 'p' && t[1] && !muted.has(t[1])) { muted.add(t[1]); changed = true; }
+  }
+  if (changed) {
+    lsSet(LS.muted, [...muted]);
+    views.current?.refreshFilters?.();
+  }
+}
+
+/**
+ * SPEC §6 — publish a NIP-51 list edit as a read-modify-write of the FULL tag
+ * list. Never build the published list from cached state: that silently drops
+ * entries added in another client. If the fetch fails we refuse to publish.
+ * `content` is carried over untouched — on a mute list it may hold private,
+ * encrypted entries we cannot read and must not destroy.
+ */
+async function editList(kind, mutate) {
+  const { ok, event } = await fetchLatestReplaceable(kind, signer.pubkey);
+  if (!ok) {
+    throw new Error('Could not read your current list from any relay. Not publishing a partial list.');
+  }
+  const tags = mutate(event ? event.tags.map((t) => [...t]) : []);
+  return publish({ kind, tags, content: event?.content ?? '' });
+}
+
+async function muteAuthor(pubkey) {
+  await editList(10000, (tags) => {
+    if (!tags.some((t) => t[0] === 'p' && t[1] === pubkey)) tags.push(['p', pubkey]);
+    return tags;
+  });
+  addMutedLocal(pubkey);
+}
+
+async function unmuteAuthor(pubkey) {
+  await editList(10000, (tags) => tags.filter((t) => !(t[0] === 'p' && t[1] === pubkey)));
+  removeMutedLocal(pubkey);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   UI primitives — toasts and sheets
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+function toast(message, { error = false, ms = 3600, action = null } = {}) {
+  const host = $('#toasts');
+  const node = el('div', { class: 'toast' + (error ? ' err' : '') },
+    el('span', { class: 'tt', text: message }));
+  if (action) {
+    node.append(el('button', {
+      type: 'button', text: action.label,
+      onclick: () => { close(); action.onClick(); },
+    }));
+  }
+  let closed = false;
+  const close = () => {
+    if (closed) return;
+    closed = true;
+    clearTimeout(timer);
+    node.style.transition = 'opacity .15s, transform .15s';
+    node.style.opacity = '0';
+    node.style.transform = 'translateY(6px)';
+    setTimeout(() => node.remove(), 160);
+  };
+  const timer = setTimeout(close, ms);
+  host.append(node);
+  while (host.children.length > 3) host.firstElementChild.remove();
+  return close;
+}
+
+let openSheetClose = null;
+
+function openSheet({ title, body, padded = false }) {
+  closeSheet();
+  const panel = el('div', { class: 'sheet', role: 'dialog', 'aria-modal': 'true', 'aria-label': title || 'Menu' });
+  if (title) {
+    panel.append(el('div', { class: 'sheet-hd' },
+      el('div', { class: 'sheet-title', text: title }),
+      el('button', { class: 'icon-btn', 'aria-label': 'Close', html: I.x, onclick: () => closeSheet() }),
+    ));
+  }
+  panel.append(el('div', { class: 'sheet-body' + (padded ? ' pad' : '') }, body));
+
+  const backdrop = el('div', {
+    class: 'backdrop',
+    onclick: (e) => { if (e.target === backdrop) closeSheet(); },
+  }, panel);
+
+  const onKey = (e) => { if (e.key === 'Escape') { e.preventDefault(); closeSheet(); } };
+  document.addEventListener('keydown', onKey);
+  $('#sheet-root').append(backdrop);
+
+  const focusable = panel.querySelector('textarea, input, button:not([disabled])');
+  focusable?.focus({ preventScroll: true });
+
+  openSheetClose = () => {
+    document.removeEventListener('keydown', onKey);
+    backdrop.remove();
+    openSheetClose = null;
+  };
+  return openSheetClose;
+}
+
+function closeSheet() { openSheetClose?.(); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SPEC §3.3 — menus render from the registry, never from a hand-written list.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+function actionMenu(context, ctx) {
+  const list = el('div');
+  const entries = actionsFor(context);
+  let lastTier = null;
+
+  for (const a of entries) {
+    const disabled = disabledReason(a, ctx);
+    if (lastTier === 1 && a.tier === 2) list.append(el('div', { class: 'menu-sep' }));
+    lastTier = a.tier;
+    list.append(el('button', {
+      class: 'menu-item' + (isDestructive(a) ? ' danger' : ''),
+      type: 'button',
+      disabled: !!disabled,
+      title: disabled || '',
+      onclick: () => { closeSheet(); a.handler(ctx); },
+    },
+      el('span', { html: a.icon }),
+      el('span', { class: 'ml', text: a.label }),
+      a.tier === 2 ? el('span', { class: 'badge', text: 'soon' })
+        : (disabled ? el('span', { class: 'badge', text: 'sign in' }) : null),
+    ));
+  }
+
+  list.append(el('div', { class: 'menu-sep' }));
+  list.append(el('div', {
+    class: 'menu-note',
+    text: 'Greyed-out entries are declared in the action registry but land in a later milestone.',
+  }));
+  return list;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SPEC §3.3 — Action registry
+
+   Actions are data, not code. One registry; every menu in the app renders
+   from it. Entry shape is fixed:
+
+     { id, label, icon, contexts, needsSigner, tier, handler, telemetry }
+
+     contexts   'note' | 'profile'
+     tier       1 = implemented, 2 = declared but not implemented (renders
+                as a disabled "soon" entry)
+     telemetry  { field, polarity } — the SPEC §7 field this action sets and
+                its polarity, declared here so Rookery never has to infer
+                intent from a field name. `null` where the action sets no
+                telemetry field: SPEC §7's polarity table covers action-driven
+                fields only; `shown`, `dwell_ms` and `opened` are collected
+                passively (observer / navigation) and carry no polarity, and
+                report / share / copy-npub have no field at all.
+
+   M1 implements reply, react, view replies, view profile, mute and
+   not-interested. Everything else in SPEC §6 is declared here at tier 2 so
+   that adding it later is one edit to this array — not a refactor of the
+   telemetry schema or the menu UI.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+const candidateSet = new Set();
+
+/** Telemetry is keyed by candidate pubkey; non-candidates are not reported. */
+function markCandidate(pubkey, field, value = true) {
+  if (pubkey && candidateSet.has(pubkey)) telemetry.mark(pubkey, field, value);
+}
+function bumpCandidate(pubkey, field, by = 1) {
+  if (pubkey && candidateSet.has(pubkey)) telemetry.bump(pubkey, field, by);
+}
+
+const ACTIONS = [
+  /* ── note, tier 1 ─────────────────────────────────────────────────────── */
+  {
+    id: 'reply',
+    label: 'Reply',
+    icon: I.reply,
+    contexts: ['note'],
+    needsSigner: true,
+    tier: 1,
+    handler: (ctx) => openReplyComposer(ctx.note),
+    telemetry: { field: 'replied', polarity: 'positive' },
+  },
+  {
+    id: 'react',
+    label: 'React',
+    icon: I.react,
+    contexts: ['note'],
+    needsSigner: true,
+    tier: 1,
+    handler: (ctx) => openReactionPicker(ctx.note, ctx.trigger),
+    telemetry: { field: 'reacted', polarity: 'positive' },
+  },
+  {
+    id: 'view-replies',
+    label: 'View replies',
+    icon: I.thread,
+    contexts: ['note'],
+    needsSigner: false,
+    tier: 1,
+    handler: (ctx) => openThread(ctx.note),
+    telemetry: null,          // sets `opened` via navigation; no polarity in §7
+  },
+  {
+    id: 'view-reactions',
+    label: 'View reactions',
+    icon: I.react,
+    contexts: ['note'],
+    needsSigner: false,
+    tier: 2,
+    handler: null,
+    telemetry: { field: 'viewed_engagement', polarity: 'positive' },
+  },
+  {
+    id: 'view-zaps',
+    label: 'View zaps',
+    icon: I.zap,
+    contexts: ['note'],
+    needsSigner: false,
+    tier: 2,
+    handler: null,
+    telemetry: { field: 'viewed_engagement', polarity: 'positive' },
+  },
+  {
+    id: 'view-reposts',
+    label: 'View reposts & quotes',
+    icon: I.repost,
+    contexts: ['note'],
+    needsSigner: false,
+    tier: 2,
+    handler: null,
+    telemetry: { field: 'viewed_engagement', polarity: 'positive' },
+  },
+  {
+    id: 'view-context',
+    label: 'View note context',
+    icon: I.context,
+    contexts: ['note'],
+    needsSigner: false,
+    tier: 2,
+    handler: null,
+    telemetry: { field: 'viewed_context', polarity: 'neutral' },
+  },
+  {
+    id: 'view-profile',
+    label: 'View profile',
+    icon: I.user,
+    contexts: ['note'],
+    needsSigner: false,
+    tier: 1,
+    handler: (ctx) => openProfile(ctx.note.pubkey),
+    telemetry: { field: 'opened_profile', polarity: 'positive' },
+  },
+  {
+    id: 'copy-nevent',
+    label: 'Copy nevent',
+    icon: I.copy,
+    contexts: ['note'],
+    needsSigner: false,
+    tier: 2,
+    handler: null,
+    telemetry: { field: 'copied_nevent', polarity: 'neutral' },
+  },
+  {
+    id: 'view-raw-note',
+    label: 'View raw event JSON',
+    icon: I.code,
+    contexts: ['note'],
+    needsSigner: false,
+    tier: 2,
+    handler: null,
+    telemetry: { field: 'viewed_raw', polarity: 'neutral' },
+  },
+  {
+    id: 'bookmark',
+    label: 'Bookmark',
+    icon: I.bookmark,
+    contexts: ['note'],
+    needsSigner: true,
+    tier: 2,
+    handler: null,
+    telemetry: { field: 'bookmarked', polarity: 'strong_positive' },
+  },
+
+  /* ── note, tier 2 (SPEC §6 — later milestones) ────────────────────────── */
+  {
+    id: 'zap-note',
+    label: 'Zap',
+    icon: I.zap,
+    contexts: ['note'],
+    needsSigner: true,
+    tier: 2,
+    handler: null,
+    telemetry: { field: 'zapped', polarity: 'strong_positive' },
+  },
+  {
+    id: 'report-note',
+    label: 'Report',
+    icon: I.flag,
+    contexts: ['note'],
+    needsSigner: true,
+    tier: 2,
+    handler: null,
+    telemetry: null,
+  },
+  {
+    id: 'share-njump',
+    label: 'Share to njump',
+    icon: I.share,
+    contexts: ['note'],
+    needsSigner: false,
+    tier: 2,
+    handler: null,
+    telemetry: null,
+  },
+
+  /* ── profile, tier 1 ──────────────────────────────────────────────────── */
+  {
+    id: 'follow',
+    label: 'Follow',
+    icon: I.follow,
+    contexts: ['profile'],
+    needsSigner: true,
+    tier: 2,
+    handler: null,
+    telemetry: { field: 'followed', polarity: 'strong_positive' },
+  },
+  {
+    id: 'unfollow',
+    label: 'Unfollow',
+    icon: I.unfollow,
+    contexts: ['profile'],
+    needsSigner: true,
+    tier: 2,
+    handler: null,
+    telemetry: { field: 'unfollowed', polarity: 'strong_negative' },
+  },
+  {
+    id: 'copy-npub',
+    label: 'Copy npub',
+    icon: I.copy,
+    contexts: ['profile'],
+    needsSigner: false,
+    tier: 2,
+    handler: null,
+    telemetry: null,
+  },
+  {
+    id: 'copy-nprofile',
+    label: 'Copy nprofile',
+    icon: I.link,
+    contexts: ['profile'],
+    needsSigner: false,
+    tier: 2,
+    handler: null,
+    telemetry: null,
+  },
+  {
+    id: 'nip05-status',
+    label: 'nip05 verification status',
+    icon: I.check,
+    contexts: ['profile'],
+    needsSigner: false,
+    tier: 2,
+    handler: null,
+    telemetry: null,
+  },
+  {
+    id: 'watchlist',
+    label: 'Add to watchlist',
+    icon: I.watch,
+    contexts: ['profile'],
+    needsSigner: true,
+    tier: 2,
+    handler: null,
+    telemetry: { field: 'watchlisted', polarity: 'strong_positive' },
+  },
+  {
+    id: 'view-raw-profile',
+    label: 'View raw kind 0',
+    icon: I.code,
+    contexts: ['profile'],
+    needsSigner: false,
+    tier: 2,
+    handler: null,
+    telemetry: { field: 'viewed_raw', polarity: 'neutral' },
+  },
+
+  /* ── profile, tier 2 (SPEC §6 — later milestones) ─────────────────────── */
+  {
+    id: 'zap-profile',
+    label: 'Zap profile',
+    icon: I.zap,
+    contexts: ['profile'],
+    needsSigner: true,
+    tier: 2,
+    handler: null,
+    telemetry: { field: 'zapped', polarity: 'strong_positive' },
+  },
+  {
+    id: 'report-profile',
+    label: 'Report',
+    icon: I.flag,
+    contexts: ['profile'],
+    needsSigner: true,
+    tier: 2,
+    handler: null,
+    telemetry: null,
+  },
+
+  /* ── both contexts, tier 1 — kept apart on purpose (SPEC §6) ──────────── */
+  {
+    id: 'not-interested',
+    label: 'Not interested',
+    icon: I.hide,
+    contexts: ['note', 'profile'],
+    needsSigner: false,
+    tier: 1,
+    handler: (ctx) => notInterested(ctx.pubkey),
+    telemetry: { field: 'not_interested', polarity: 'negative' },
+  },
+  {
+    id: 'mute',
+    label: 'Mute author',
+    icon: I.mute,
+    contexts: ['note', 'profile'],
+    needsSigner: true,
+    tier: 1,
+    handler: (ctx) => confirmMute(ctx.pubkey),
+    telemetry: { field: 'muted', polarity: 'strong_negative' },
+  },
+];
+
+const actionById = new Map(ACTIONS.map((a) => [a.id, a]));
+
+/** Implemented entries first, "soon" entries after; declaration order within. */
+function actionsFor(context) {
+  return ACTIONS
+    .filter((a) => a.contexts.includes(context))
+    .map((a, i) => [a, i])
+    .sort((x, y) => (x[0].tier - y[0].tier) || (x[1] - y[1]))
+    .map(([a]) => a);
+}
+
+function disabledReason(a) {
+  if (a.tier === 2 || typeof a.handler !== 'function') return 'Declared for a later milestone';
+  if (a.needsSigner && !signer.connected) return 'Connect a signer to use this';
+  return null;
+}
+
+const isDestructive = (a) => a.telemetry?.polarity === 'strong_negative';
+
+/** Render one registry entry as an inline action button. */
+function inlineAction(id, ctx, { showLabel = true } = {}) {
+  const a = actionById.get(id);
+  const reason = disabledReason(a);
+  return el('button', {
+    class: 'act' + (isDestructive(a) ? ' danger' : ''),
+    type: 'button',
+    'data-action': a.id,
+    disabled: !!reason,
+    title: reason || a.label,
+    'aria-label': a.label,
+    onclick: (e) => {
+      e.stopPropagation();
+      a.handler({ ...ctx, trigger: e.currentTarget });
+    },
+  }, el('span', { html: a.icon }), showLabel ? el('span', { text: a.label }) : null);
+}
+
+function openActionMenu(context, ctx) {
+  openSheet({
+    title: context === 'note' ? 'Note' : profiles.displayName(ctx.pubkey),
+    body: actionMenu(context, ctx),
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   tier-1 action handlers (M1)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+const reactedNotes = new Set();   // note id -> already reacted this session
+
+/* ── reply ──────────────────────────────────────────────────────────────── */
+
+function openReplyComposer(note) {
+  const ta = el('textarea', {
+    class: 'ta', placeholder: 'Write a reply…', 'aria-label': 'Reply text',
+    rows: '4', maxlength: '5000',
+  });
+  const post = el('button', { class: 'btn primary', type: 'button', text: 'Reply', disabled: true });
+  const hint = el('span', { class: 'hint', text: 'Replying to ' + profiles.displayName(note.pubkey) });
+
+  const quote = el('div', { class: 'ctx-quote' });
+  renderContentInto(quote, note.content.slice(0, 400));
+
+  ta.addEventListener('input', () => { post.disabled = !ta.value.trim(); });
+  ta.addEventListener('keydown', (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && ta.value.trim()) { e.preventDefault(); send(); }
+  });
+  post.addEventListener('click', send);
+
+  async function send() {
+    const content = ta.value.trim();
+    if (!content) return;
+    post.disabled = true; ta.disabled = true;
+    post.textContent = 'Publishing…';
+    try {
+      const { event, accepted, total } = await publish({
+        kind: 1, content, tags: replyTagsFor(note),
+      });
+      markCandidate(note.pubkey, 'replied', true);
+      closeSheet();
+      toast(`Reply published to ${accepted}/${total} relays.`);
+      views.current?.onLocalReply?.(event, note.id);
+    } catch (e) {
+      post.disabled = false; ta.disabled = false;
+      post.textContent = 'Reply';
+      toast(e?.message || 'Could not publish the reply.', { error: true, ms: 5500 });
+    }
+  }
+
+  openSheet({
+    title: 'Reply',
+    padded: true,
+    body: el('div', { class: 'composer' }, quote, ta, el('div', { class: 'row-end' }, hint,
+      el('button', { class: 'btn', type: 'button', text: 'Cancel', onclick: () => closeSheet() }), post)),
+  });
+}
+
+/* ── react (SPEC §6: content goes in the kind 7 `content` field, NIP-25) ─── */
+
+const REACTIONS = [
+  { content: '+', label: 'like', text: true },
+  { content: '-', label: 'dislike', text: true },
+  { content: '🤙', label: 'nice' },
+  { content: '⚡', label: 'zap-ish' },
+  { content: '🔥', label: 'fire' },
+  { content: '❤️', label: 'heart' },
+  { content: '😂', label: 'funny' },
+  { content: '👀', label: 'watching' },
+];
+
+function openReactionPicker(note, trigger) {
+  const grid = el('div', { class: 'emoji-grid' });
+  for (const r of REACTIONS) {
+    grid.append(el('button', {
+      class: 'emoji-btn' + (r.text ? ' txt' : ''),
+      type: 'button',
+      'aria-label': 'React with ' + r.label,
+      onclick: () => react(note, r.content, trigger),
+    }, el('span', { text: r.content }), el('small', { text: r.label })));
+  }
+  openSheet({ title: 'React', body: grid });
+}
+
+async function react(note, content, trigger) {
+  closeSheet();
+  try {
+    await publish({
+      kind: 7,
+      content,
+      tags: [
+        ['e', note.id, hints()[0] || '', '', note.pubkey],
+        ['p', note.pubkey],
+        ['k', String(note.kind)],
+      ],
+    });
+    reactedNotes.add(note.id);
+    markCandidate(note.pubkey, 'reacted', true);
+    trigger?.classList.add('on');
+    toast(`Reacted ${content}`);
+  } catch (e) {
+    toast(e?.message || 'Could not publish the reaction.', { error: true, ms: 5500 });
+  }
+}
+
+/* ── not interested — soft, local, publishes nothing (SPEC §6) ───────────── */
+
+function notInterested(pubkey) {
+  markCandidate(pubkey, 'not_interested', true);
+  addDismissed(pubkey);
+  views.current?.removeAuthor?.(pubkey, 'not-interested');
+  toast('Hidden. Nothing was published.', {
+    ms: 6000,
+    action: {
+      label: 'Undo',
+      onClick: () => {
+        removeDismissed(pubkey);
+        markCandidate(pubkey, 'not_interested', false);
+        views.current?.restoreAuthor?.(pubkey);
+        toast('Restored.');
+      },
+    },
+  });
+}
+
+/* ── mute — hard, permanent, published (SPEC §6) ─────────────────────────── */
+
+function confirmMute(pubkey) {
+  const name = profiles.displayName(pubkey);
+  const go = el('button', { class: 'btn primary', type: 'button', text: 'Mute and publish' });
+
+  const body = el('div', { class: 'composer prose' },
+    el('p', { text: `Mute ${name}? This publishes an updated kind 10000 mute list to your relays and hides them everywhere in this client — permanently, and in every other client that reads your mute list.` }),
+    el('p', {}, el('strong', { text: 'If you just want fewer posts like this, ' }),
+      'use "Not interested" instead. It stays on this device and publishes nothing.'),
+    el('div', { class: 'row-end' },
+      el('button', { class: 'btn', type: 'button', text: 'Cancel', onclick: () => closeSheet() }), go),
+  );
+
+  go.addEventListener('click', async () => {
+    go.disabled = true;
+    go.textContent = 'Publishing…';
+    try {
+      await muteAuthor(pubkey);
+      markCandidate(pubkey, 'muted', true);
+      closeSheet();
+      views.current?.removeAuthor?.(pubkey, 'muted');
+      refreshAllFilters();
+      toast(`Muted ${name}.`);
+    } catch (e) {
+      go.disabled = false;
+      go.textContent = 'Mute and publish';
+      toast(e?.message || 'Could not update your mute list.', { error: true, ms: 7000 });
+    }
+  });
+
+  openSheet({ title: 'Mute', padded: true, body });
+}
+
+async function undoMute(pubkey) {
+  try {
+    await unmuteAuthor(pubkey);
+    refreshAllFilters();
+    toast('Unmuted. Your published mute list was updated.');
+  } catch (e) {
+    toast(e?.message || 'Could not update your mute list.', { error: true, ms: 7000 });
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   shared rendering
+
+   Everything that resolves late (avatar, banner, display name) writes into a
+   box that already has its final size. Nothing on screen moves when a kind 0
+   lands — that is the whole reason avatars are fixed-square and the name line
+   has a fixed height with a skeleton placeholder of its own.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+function safeImageUrl(u) {
+  if (typeof u !== 'string') return null;
+  const s = u.trim();
+  return /^https?:\/\/[^\s]+$/i.test(s) ? s : null;
+}
+
+function avatarEl(pubkey, { lg = false } = {}) {
+  const box = el('span', { class: 'avatar' + (lg ? ' lg' : ''), style: gradientFor(pubkey) });
+  const img = el('img', { alt: '', loading: 'lazy', decoding: 'async' });
+  img.addEventListener('load', () => img.classList.add('on'));
+  img.addEventListener('error', () => { img.classList.remove('on'); img.removeAttribute('src'); });
+  box.append(img);
+  profiles.bind(pubkey, (meta) => {
+    const url = safeImageUrl(meta?.picture);
+    if (url && img.getAttribute('src') !== url) img.src = url;
+  });
+  return box;
+}
+
+/** Live relative timestamps, refreshed together on one interval. */
+const tsNodes = new Set();
+function tsEl(unix) {
+  const n = el('span', { class: 'ts', text: relTime(unix), title: new Date(unix * 1000).toLocaleString() });
+  n._ts = unix;
+  tsNodes.add(n);
+  return n;
+}
+setInterval(() => {
+  for (const n of tsNodes) {
+    if (!n.isConnected) { tsNodes.delete(n); continue; }
+    n.textContent = relTime(n._ts);
+  }
+}, 30_000);
+
+function authorHeader(pubkey, { avatarSize = 'sm', unix = null, menuContext = 'profile', ctx = {} } = {}) {
+  const name = el('span', { class: 'dname pending' });
+  const npub = el('span', { class: 'npub', text: shortNpub(pubkey) });
+  const sub = el('div', { class: 'sub-row' }, npub);
+  if (unix != null) {
+    sub.append(el('span', { class: 'sep', text: '·' }), tsEl(unix));
+  }
+
+  profiles.bind(pubkey, () => {
+    const shown = profiles.displayName(pubkey);
+    name.classList.remove('pending');
+    name.textContent = shown;
+    // Don't print the same truncated npub twice when there is no kind 0 name.
+    npub.hidden = shown === shortNpub(pubkey);
+  });
+
+  const open = (e) => { e.stopPropagation(); openProfile(pubkey); };
+
+  return el('div', { class: 'card-hd' },
+    el('button', { type: 'button', 'aria-label': 'View profile', onclick: open },
+      avatarEl(pubkey, { lg: avatarSize === 'lg' })),
+    el('div', { class: 'who' },
+      el('button', { type: 'button', class: 'name-row', onclick: open }, name),
+      sub),
+    el('button', {
+      class: 'icon-btn', type: 'button', 'aria-label': 'More actions', html: I.more,
+      onclick: (e) => {
+        e.stopPropagation();
+        openActionMenu(menuContext, { pubkey, ...ctx, trigger: e.currentTarget });
+      },
+    }),
+  );
+}
+
+/* ── note body: plain text, clamped, expandable ─────────────────────────── */
+
+function noteBodyEl(note) {
+  const text = String(note.content ?? '');
+  const longish = text.length > 460 || (text.match(/\n/g)?.length ?? 0) > 9;
+  const body = el('div', { class: 'note-body' + (longish ? ' clamped' : '') });
+  renderContentInto(body, text);
+  const wrap = el('div', {}, body);
+  if (longish) {
+    const more = el('button', {
+      class: 'more-btn', type: 'button', text: 'Show more',
+      onclick: (e) => {
+        e.stopPropagation();
+        const open = body.classList.toggle('clamped');
+        more.textContent = open ? 'Show more' : 'Show less';
+      },
+    });
+    wrap.append(more);
+  }
+  return wrap;
+}
+
+function noteActionsEl(note) {
+  const ctx = { note, pubkey: note.pubkey };
+  const row = el('div', { class: 'acts' },
+    inlineAction('reply', ctx),
+    inlineAction('react', ctx),
+    inlineAction('view-replies', ctx),
+    el('div', { class: 'grow' }),
+    el('button', {
+      class: 'act', type: 'button', 'aria-label': 'More note actions', html: I.more,
+      title: 'More note actions',
+      onclick: (e) => { e.stopPropagation(); openActionMenu('note', { ...ctx, trigger: e.currentTarget }); },
+    }),
+  );
+  if (reactedNotes.has(note.id)) row.querySelectorAll('.act')[1]?.classList.add('on');
+  return row;
+}
+
+/** A note inside a candidate card — the author header is on the card. */
+function noteBlock(note) {
+  const block = el('div', {
+    class: 'note', 'data-id': note.id,
+    onclick: (e) => { if (!e.target.closest('a,button')) openThread(note); },
+  },
+    el('div', { class: 'note-head' }, tsEl(note.created_at),
+      isReply(note) ? el('span', { class: 'sep', text: '· reply' }) : null),
+    noteBodyEl(note),
+    noteActionsEl(note),
+  );
+  return block;
+}
+
+/** A standalone note with its own author header — thread and profile views. */
+function noteCard(note, { extraClass = '' } = {}) {
+  return el('article', {
+    class: 'card ' + extraClass, 'data-pubkey': note.pubkey, 'data-id': note.id,
+    onclick: (e) => { if (!e.target.closest('a,button')) openThread(note); },
+  },
+    authorHeader(note.pubkey, { unix: note.created_at, menuContext: 'note', ctx: { note } }),
+    el('div', { class: 'note', style: 'cursor:default' },
+      noteBodyEl(note),
+      noteActionsEl(note)),
+  );
+}
+
+/* ── skeletons ──────────────────────────────────────────────────────────── */
+
+function skeletonCard() {
+  return el('article', { class: 'card skel-card', 'aria-hidden': 'true' },
+    el('div', { style: 'display:flex;gap:10px;align-items:center' },
+      el('div', { class: 'skel', style: 'width:42px;height:42px;border-radius:50%;flex:0 0 auto' }),
+      el('div', { style: 'flex:1 1 auto' },
+        el('div', { class: 'skel', style: 'height:11px;width:40%' }),
+        el('div', { class: 'skel skel-line', style: 'width:26%' })),
+    ),
+    el('div', { class: 'skel skel-line', style: 'margin-top:16px;width:100%' }),
+    el('div', { class: 'skel skel-line', style: 'width:92%' }),
+    el('div', { class: 'skel skel-line', style: 'width:64%' }),
+  );
+}
+
+function skeletonList(n = 4) {
+  const frag = document.createDocumentFragment();
+  for (let i = 0; i < n; i++) frag.append(skeletonCard());
+  return frag;
+}
+
+function emptyState(icon, text) {
+  return el('div', { class: 'empty' }, el('div', { html: icon }), el('div', { text }));
+}
+
+function loadingLine(text = 'Loading…') {
+  return el('div', { class: 'loading-line' }, el('span', { class: 'spin' }), el('span', { text }));
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SPEC §5 — view stack
+
+   A stack, not a single "back to feed". Feed → note → author profile → one of
+   their notes → its parent is a normal path and back unwinds it one step at a
+   time. Views below the top stay mounted with their scroll position intact, so
+   coming back is instant and lands exactly where you left.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+const views = {
+  stack: [],
+  _host: null,
+
+  init(host) { this._host = host; },
+  get top() { return this.stack[this.stack.length - 1] ?? null; },
+  get current() { return this.top; },
+
+  push(controller) {
+    const prev = this.top;
+    if (prev) {
+      prev._scrollTop = prev.el.scrollTop;
+      prev.el.hidden = true;
+    }
+    this.stack.push(controller);
+    this._host.append(controller.el);
+    controller.el.hidden = false;
+    this._sync();
+    try { history.pushState({ depth: this.stack.length }, ''); } catch { /* file:// */ }
+  },
+
+  replaceRoot(controller) {
+    for (const v of this.stack) { v.destroy?.(); v.el.remove(); }
+    this.stack = [controller];
+    this._host.append(controller.el);
+    this._sync();
+  },
+
+  pop() {
+    if (this.stack.length <= 1) return false;
+    const top = this.stack.pop();
+    top.destroy?.();
+    top.el.remove();
+    const next = this.top;
+    next.el.hidden = false;
+    next.el.scrollTop = next._scrollTop ?? 0;
+    this._sync();
+    return true;
+  },
+
+  back() {
+    if (this.stack.length <= 1) return;
+    // Let popstate drive the pop when history is available, so the browser /
+    // Android back button and this button stay in step.
+    try {
+      if (history.state?.depth) { history.back(); return; }
+    } catch { /* file:// */ }
+    this.pop();
+  },
+
+  _sync() {
+    const top = this.top;
+    $('#back-btn').hidden = this.stack.length <= 1;
+    const crumb = $('#crumb');
+    if (this.stack.length <= 1 || !top?.title) {
+      crumb.hidden = true;
+    } else {
+      crumb.hidden = false;
+      crumb.textContent = top.title;
+    }
+    document.title = top?.title ? `${top.title} · hatchling` : 'hatchling';
+  },
+
+  each(fn) { for (const v of this.stack) fn(v); },
+};
+
+function refreshAllFilters() { views.each((v) => v.refreshFilters?.()); }
+
+/** Shell every view shares. */
+function viewShell() {
+  const inner = el('div', { class: 'view-inner' });
+  const root = el('section', { class: 'view entering' }, inner);
+  setTimeout(() => root.classList.remove('entering'), 220);
+  return { root, inner };
+}
+
+/* ── dwell observer (SPEC §7) ───────────────────────────────────────────────
+   One observer per feed. `shown` and `dwell_ms` come from here; dwell only
+   accrues while the tab is foregrounded (see telemetry.enter/leave).
+   ─────────────────────────────────────────────────────────────────────────── */
+
+const dwellGroups = new Set();
+
+function makeDwellObserver(root) {
+  const visible = new Set();
+  const io = new IntersectionObserver((entries) => {
+    for (const e of entries) {
+      const pk = e.target.dataset.pubkey;
+      if (!pk) continue;
+      if (e.isIntersecting && e.intersectionRatio >= 0.5) {
+        visible.add(pk);
+        // Time on a backgrounded tab is not attention; the clock starts again
+        // from resumeDwell() when the tab comes forward.
+        if (document.visibilityState === 'visible') telemetry.enter(pk);
+      } else {
+        visible.delete(pk);
+        telemetry.leave(pk);
+      }
+    }
+  }, { root, threshold: [0, 0.5, 1] });
+
+  const group = {
+    visible,
+    observe: (node) => io.observe(node),
+    unobserve: (node) => io.unobserve(node),
+    disconnect: () => {
+      dwellGroups.delete(group);
+      for (const pk of visible) telemetry.leave(pk);
+      visible.clear();
+      io.disconnect();
+    },
+  };
+  dwellGroups.add(group);
+  return group;
+}
+
+/** A card can already be on screen when the tab comes forward — no new
+    intersection fires for it, so restart those clocks explicitly. */
+function resumeDwell() {
+  for (const g of dwellGroups) for (const pk of g.visible) telemetry.enter(pk);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Feed (SPEC §5)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+function createFeedView() {
+  const { root, inner } = viewShell();
+  const list = el('div');
+  const tail = el('div');
+  const skeletons = el('div', {}, skeletonList(4));
+  inner.append(skeletons, list, tail);
+
+  const observer = makeDwellObserver(root);
+  const cards = new Map();          // pubkey -> card element
+  const notesByAuthor = new Map();  // pubkey -> events
+  let order = [];                   // candidate pubkeys in DVM rank order
+  let painted = new Set();
+  let sub = null;
+  let killed = false;
+  let firstPaintDone = false;
+
+  const ctrl = {
+    el: root,
+    title: null,
+    destroy() {
+      killed = true;
+      observer.disconnect();
+      telemetry.bankAll();
+      try { sub?.close(); } catch { /* noop */ }
+    },
+    refreshFilters() {
+      for (const [pk, card] of cards) {
+        const hide = isHidden(pk);
+        if (hide && !card.hidden) { telemetry.leave(pk); card.hidden = true; }
+        else if (!hide && card.hidden) card.hidden = false;
+      }
+      checkEmpty();
+    },
+    removeAuthor(pk) {
+      const card = cards.get(pk);
+      if (!card || card.hidden) return;
+      telemetry.leave(pk);
+      card.classList.add('dismissing');
+      setTimeout(() => {
+        card.hidden = true;
+        card.classList.remove('dismissing');
+        checkEmpty();
+      }, 170);
+    },
+    restoreAuthor(pk) {
+      const card = cards.get(pk);
+      if (!card) return;
+      card.hidden = false;
+      emptyNode?.remove();
+      emptyNode = null;
+    },
+    reload() { start(); },
+  };
+
+  let emptyNode = null;
+  function checkEmpty() {
+    const anyVisible = [...cards.values()].some((c) => !c.hidden);
+    if (!anyVisible && !emptyNode && firstPaintDone) {
+      emptyNode = emptyState(I.inbox,
+        'Nothing left in this batch. Everything here was muted or dismissed.');
+      tail.append(emptyNode);
+    } else if (anyVisible && emptyNode) {
+      emptyNode.remove();
+      emptyNode = null;
+    }
+  }
+
+  function buildCard(cand) {
+    const notes = (notesByAuthor.get(cand.pubkey) || []).slice(0, NOTES_PER_CANDIDATE);
+    const card = el('article', { class: 'card', 'data-pubkey': cand.pubkey },
+      authorHeader(cand.pubkey, { menuContext: 'profile', ctx: {} }),
+      cand.reason ? el('div', { class: 'reason' }, el('span', { html: I.sparkle }),
+        el('span', { text: cand.reason })) : null,
+      el('div', { class: 'notes' }, notes.map(noteBlock)),
+    );
+    if (isHidden(cand.pubkey)) card.hidden = true;
+    cards.set(cand.pubkey, card);
+    observer.observe(card);
+    return card;
+  }
+
+  /** Paint every candidate that has a note, in the ranker's order. */
+  function paintFirstBatch(candidates) {
+    if (firstPaintDone || killed) return;
+    firstPaintDone = true;
+    skeletons.remove();
+    const frag = document.createDocumentFragment();
+    for (const c of candidates) {
+      if (!notesByAuthor.get(c.pubkey)?.length) continue;
+      painted.add(c.pubkey);
+      frag.append(buildCard(c));
+    }
+    list.append(frag);
+    if (!painted.size) {
+      tail.append(loadingLine('Waiting on relays…'));
+    }
+    checkEmpty();
+  }
+
+  /** Late arrivals append below the fold — never inserted above what you read. */
+  function paintLate(cand) {
+    if (!firstPaintDone || killed || painted.has(cand.pubkey)) return;
+    if (!notesByAuthor.get(cand.pubkey)?.length) return;
+    painted.add(cand.pubkey);
+    tail.querySelector('.loading-line')?.remove();
+    list.append(buildCard(cand));
+    checkEmpty();
+  }
+
+  async function start() {
+    const candidates = (await dvm.fetchCandidates({ limit: 12 }))
+      .filter((c) => /^[0-9a-f]{64}$/.test(c.pubkey));
+    if (killed) return;
+
+    for (const c of candidates) candidateSet.add(c.pubkey);
+    order = candidates.map((c) => c.pubkey);
+    profiles.request(order);
+
+    // One REQ, one filter per candidate: relays apply `limit` per filter, so
+    // this gets recent notes per author without one subscription each.
+    const filters = candidates.map((c) => (
+      c.sampleEventIds?.length
+        ? { ids: c.sampleEventIds }
+        : { kinds: [1], authors: [c.pubkey], limit: 8 }
+    ));
+
+    const paintTimer = setTimeout(() => paintFirstBatch(candidates), FEED_FIRST_PAINT_MS);
+
+    sub = subscribe(filters, {
+      onevent: (ev) => {
+        if (ev.kind !== 1 || !order.includes(ev.pubkey)) return;
+        const arr = notesByAuthor.get(ev.pubkey) || [];
+        if (arr.some((e) => e.id === ev.id)) return;
+        arr.push(ev);
+        // Top-level notes read best in a discovery feed; fall back to replies
+        // only for an author who has nothing else.
+        arr.sort((a, b) => (isReply(a) - isReply(b)) || (b.created_at - a.created_at));
+        notesByAuthor.set(ev.pubkey, arr);
+        if (firstPaintDone) paintLate(candidates.find((c) => c.pubkey === ev.pubkey));
+      },
+      oneose: () => {
+        clearTimeout(paintTimer);
+        paintFirstBatch(candidates);
+      },
+      maxWait: FEED_FIRST_PAINT_MS,
+    });
+
+    setTimeout(() => {
+      try { sub?.close(); } catch { /* noop */ }
+      if (killed) return;
+      tail.querySelector('.loading-line')?.remove();
+      if (!painted.size) {
+        tail.append(emptyState(I.relay,
+          'No notes came back from your relays. Check the relay list, then try again.'));
+      }
+    }, FEED_SETTLE_MS);
+  }
+
+  start();
+  return ctrl;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Thread (SPEC §5) — a note plus its replies
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+function createThreadView(note) {
+  const { root, inner } = viewShell();
+  const replies = el('div');
+  const status = loadingLine('Loading replies…');
+
+  inner.append(
+    noteCard(note, { extraClass: 'thread-root' }),
+    el('div', { class: 'replies-hd' }, el('span', { text: 'Replies' }), el('span', { class: 'rule' })),
+    status,
+    replies,
+  );
+
+  const seen = new Set();
+  const byId = new Map();
+  let sub = null, killed = false;
+
+  function insert(ev) {
+    if (seen.has(ev.id) || isMuted(ev.pubkey)) return;
+    seen.add(ev.id);
+    byId.set(ev.id, ev);
+    const card = noteCard(ev, { extraClass: 'reply-card' });
+    card.dataset.ts = String(ev.created_at);
+    // keep ascending by created_at without re-sorting the DOM
+    const after = [...replies.children].find((c) => Number(c.dataset.ts) > ev.created_at);
+    replies.insertBefore(card, after ?? null);
+    status.remove();
+    profiles.request([ev.pubkey]);
+  }
+
+  sub = subscribe([{ kinds: [1], '#e': [note.id], limit: 200 }], {
+    onevent: (ev) => { if (!killed && isDirectReplyTo(ev, note.id)) insert(ev); },
+    oneose: () => {
+      status.remove();
+      if (!seen.size && !killed) {
+        replies.append(emptyState(I.reply, 'No replies yet.'));
+      }
+      setTimeout(() => { try { sub?.close(); } catch { /* noop */ } }, 4000);
+    },
+    maxWait: 6000,
+  });
+
+  return {
+    el: root,
+    title: profiles.displayName(note.pubkey) + "'s note",
+    destroy() { killed = true; try { sub?.close(); } catch { /* noop */ } },
+    refreshFilters() {
+      for (const card of replies.children) {
+        if (card.dataset.pubkey && isMuted(card.dataset.pubkey)) card.hidden = true;
+      }
+    },
+    removeAuthor(pk) {
+      for (const card of replies.children) if (card.dataset.pubkey === pk) card.hidden = true;
+    },
+    restoreAuthor(pk) {
+      for (const card of replies.children) if (card.dataset.pubkey === pk) card.hidden = false;
+    },
+    onLocalReply(ev, parentId) {
+      if (parentId === note.id) {
+        replies.querySelector('.empty')?.remove();
+        insert(ev);
+      }
+    },
+  };
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Profile (SPEC §5)
+
+   Tabs: notes / notes + replies / zapped-most. The last needs the author's
+   full zap-receipt history, which is a heavy relay query — it is declared
+   here and lands with zap display in M3. It is never loaded on profile open.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+const PROFILE_TABS = [
+  { id: 'notes', label: 'Notes', enabled: true },
+  { id: 'replies', label: 'Notes + replies', enabled: true },
+  { id: 'zapped', label: 'Zapped-most', enabled: false },
+];
+
+function createProfileView(pubkey) {
+  const { root, inner } = viewShell();
+
+  /* header — banner and avatar are fixed boxes, so images fade in without
+     moving a single pixel below them. */
+  const banner = el('div', { class: 'banner', style: gradientFor(pubkey) });
+  const bannerImg = el('img', { alt: '', decoding: 'async' });
+  bannerImg.addEventListener('load', () => bannerImg.classList.add('on'));
+  bannerImg.addEventListener('error', () => bannerImg.classList.remove('on'));
+  banner.append(bannerImg);
+
+  const nameEl = el('div', { class: 'pf-name pending' });
+  const aboutEl = el('div', { class: 'pf-about' });
+  const metaRow = el('div', { class: 'pf-meta' });
+
+  const menuBtn = el('button', {
+    class: 'icon-btn', type: 'button', 'aria-label': 'Profile actions', html: I.more,
+    onclick: (e) => openActionMenu('profile', { pubkey, trigger: e.currentTarget }),
+  });
+
+  const header = el('div', { class: 'pf' }, banner,
+    el('div', { class: 'pf-body' },
+      el('div', { class: 'pf-top' }, avatarEl(pubkey, { lg: true }), menuBtn),
+      nameEl,
+      el('div', { class: 'sub-row' }, el('span', { class: 'npub', text: shortNpub(pubkey) })),
+      aboutEl,
+      metaRow,
+    ));
+
+  function paintMeta(meta) {
+    nameEl.classList.remove('pending');
+    nameEl.textContent = profiles.displayName(pubkey);
+    if (meta?.about) renderContentInto(aboutEl, meta.about);
+
+    metaRow.textContent = '';
+    if (meta?.nip05) {
+      // SPEC §6 — never show a name as verified without resolving it.
+      // Resolution lands in M2; until then this states plainly that it is
+      // an unchecked claim.
+      metaRow.append(el('span', {
+        class: 'chip warn',
+        title: 'nip05 resolution lands in M2. Until then this is the claim in the profile, not a verified identity.',
+      }, el('span', { html: I.shield }), el('span', { text: meta.nip05 + ' · unverified' })));
+    }
+    if (isMuted(pubkey)) {
+      metaRow.append(el('span', { class: 'chip muted-flag' },
+        el('span', { html: I.mute }), el('span', { text: 'Muted' })));
+      metaRow.append(el('button', {
+        class: 'chip', type: 'button', text: 'Unmute', onclick: () => undoMute(pubkey),
+      }));
+    }
+    if (dismissed.has(pubkey)) {
+      metaRow.append(el('span', { class: 'chip' }, el('span', { html: I.hide }),
+        el('span', { text: 'Hidden from your feed' })));
+      metaRow.append(el('button', {
+        class: 'chip', type: 'button', text: 'Un-hide',
+        onclick: () => {
+          removeDismissed(pubkey);
+          markCandidate(pubkey, 'not_interested', false);
+          refreshAllFilters();
+          paintMeta(profiles.get(pubkey));
+          toast('Restored to your feed.');
+        },
+      }));
+    }
+  }
+
+  profiles.bind(pubkey, (meta) => {
+    const url = safeImageUrl(meta?.banner);
+    if (url) bannerImg.src = url;
+    paintMeta(meta);
+  });
+
+  /* tabs */
+  let tab = 'notes';
+  const tabsRow = el('div', { class: 'tabs', role: 'tablist' });
+  const tabButtons = new Map();
+  for (const t of PROFILE_TABS) {
+    const b = el('button', {
+      class: 'tab', role: 'tab', type: 'button',
+      'aria-selected': String(t.id === tab),
+      disabled: !t.enabled,
+      title: t.enabled ? '' : 'Needs the full zap-receipt history — lands with zap display in M3.',
+      onclick: () => selectTab(t.id),
+    }, el('span', { text: t.label }), t.enabled ? null : el('span', { class: 'soon', text: 'soon' }));
+    tabButtons.set(t.id, b);
+    tabsRow.append(b);
+  }
+
+  const listEl = el('div');
+  const status = loadingLine('Loading notes…');
+  inner.append(header, tabsRow, status, listEl);
+
+  const events = [];
+  const seen = new Set();
+  let sub = null, killed = false;
+
+  /* SPEC §7 — profile_notes_scrolled, counted once per distinct note. */
+  const counted = new Set();
+  const scrollObs = new IntersectionObserver((entries) => {
+    for (const e of entries) {
+      if (!e.isIntersecting || e.intersectionRatio < 0.5) continue;
+      const id = e.target.dataset.id;
+      if (!id || counted.has(id)) continue;
+      counted.add(id);
+      bumpCandidate(pubkey, 'profile_notes_scrolled', 1);
+      scrollObs.unobserve(e.target);
+    }
+  }, { root, threshold: [0.5] });
+
+  function visibleEvents() {
+    return events
+      .filter((ev) => tab === 'replies' || !isReply(ev))
+      .sort((a, b) => b.created_at - a.created_at);
+  }
+
+  function paint() {
+    listEl.textContent = '';
+    counted.clear();
+    const rows = visibleEvents();
+    if (!rows.length) {
+      listEl.append(killed || sub == null
+        ? emptyState(I.inbox, 'No notes found on your relays.')
+        : loadingLine('Loading notes…'));
+      return;
+    }
+    const frag = document.createDocumentFragment();
+    for (const ev of rows) {
+      const card = noteCard(ev);
+      frag.append(card);
+    }
+    listEl.append(frag);
+    for (const card of listEl.children) if (card.dataset.id) scrollObs.observe(card);
+  }
+
+  function selectTab(id) {
+    if (id === tab) return;
+    tab = id;
+    for (const [k, b] of tabButtons) b.setAttribute('aria-selected', String(k === id));
+    paint();
+  }
+
+  sub = subscribe([{ kinds: [1], authors: [pubkey], limit: 60 }], {
+    onevent: (ev) => {
+      if (killed || seen.has(ev.id)) return;
+      seen.add(ev.id);
+      events.push(ev);
+      status.remove();
+      schedulePaint();
+    },
+    oneose: () => {
+      status.remove();
+      schedulePaint();
+      setTimeout(() => { try { sub?.close(); } catch { /* noop */ } }, 3000);
+    },
+    maxWait: 6000,
+  });
+
+  let paintTimer = null;
+  function schedulePaint() {
+    clearTimeout(paintTimer);
+    paintTimer = setTimeout(() => { if (!killed) paint(); }, 220);
+  }
+
+  return {
+    el: root,
+    title: profiles.displayName(pubkey),
+    destroy() {
+      killed = true;
+      scrollObs.disconnect();
+      clearTimeout(paintTimer);
+      try { sub?.close(); } catch { /* noop */ }
+    },
+    refreshFilters() { paintMeta(profiles.get(pubkey)); },
+    removeAuthor(pk) { if (pk === pubkey) paintMeta(profiles.get(pubkey)); },
+    restoreAuthor(pk) { if (pk === pubkey) paintMeta(profiles.get(pubkey)); },
+  };
+}
+
+/* ── navigation entry points ────────────────────────────────────────────── */
+
+function openThread(note) {
+  markCandidate(note.pubkey, 'opened', true);
+  views.push(createThreadView(note));
+}
+
+function openProfile(pubkey) {
+  markCandidate(pubkey, 'opened_profile', true);
+  views.push(createProfileView(pubkey));
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   relays panel (SPEC §4 — user-editable and persisted)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+function openRelayPanel() {
+  const body = el('div', { class: 'composer' });
+  const rows = el('div');
+  const input = el('input', { class: 'inp', type: 'text', placeholder: 'wss://relay.example.com', 'aria-label': 'Relay URL' });
+  let dirty = false;
+
+  function draw() {
+    rows.textContent = '';
+    for (const url of relays) {
+      rows.append(el('div', { class: 'relay-row' },
+        el('span', { class: 'relay-url', text: url }),
+        el('button', {
+          class: 'icon-btn', type: 'button', 'aria-label': 'Remove ' + url, html: I.trash,
+          onclick: () => { setRelays(relays.filter((u) => u !== url)); dirty = true; draw(); },
+        }),
+      ));
+    }
+    if (!relays.length) rows.append(el('div', { class: 'menu-note', text: 'No relays — defaults will be restored.' }));
+  }
+
+  function add() {
+    const url = input.value.trim();
+    if (!isRelayUrl(url)) { toast('That is not a wss:// relay URL.', { error: true }); return; }
+    if (relays.includes(url)) { toast('Already in the list.'); return; }
+    setRelays([...relays, url]);
+    input.value = '';
+    dirty = true;
+    draw();
+  }
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } });
+
+  draw();
+  body.append(
+    rows,
+    el('div', { style: 'display:flex;gap:8px;margin-top:12px' },
+      input,
+      el('button', { class: 'btn', type: 'button', html: I.plus, 'aria-label': 'Add relay', onclick: add })),
+    el('div', { class: 'row-end' },
+      el('span', { class: 'hint', text: 'Read set. Publishing uses the same list.' }),
+      el('button', {
+        class: 'btn', type: 'button', text: 'Restore defaults',
+        onclick: () => { setRelays([...DEFAULT_RELAYS]); dirty = true; draw(); },
+      }),
+      el('button', {
+        class: 'btn primary', type: 'button', text: 'Done',
+        onclick: () => {
+          closeSheet();
+          if (dirty) { toast('Relay list saved. Reloading the feed.'); views.replaceRoot(createFeedView()); }
+        },
+      })),
+  );
+
+  openSheet({ title: 'Relays', padded: true, body });
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   privacy panel (SPEC §7 — a plain-language statement of exactly what leaves
+   the device, plus the actual buffer so the statement is checkable)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+function openPrivacyPanel() {
+  const buffer = telemetry.preview();
+  const body = el('div', { class: 'composer prose' },
+    el('p', {}, el('strong', { text: 'hatchling reports how you react to the accounts it shows you, and nothing else.' }),
+      ' That feedback is what the discovery ranker learns from. It is sent anonymously.'),
+
+    el('h4', { text: 'What leaves this device' }),
+    el('ul', {},
+      el('li', {}, 'For each account the feed shows you: its public key, whether it was on screen, roughly how long, and which of these you did — opened it, opened its profile, scrolled its notes, reacted, replied, bookmarked, followed, muted, or marked not interested.'),
+      el('li', {}, 'Nothing else. The batch is sent every 30 seconds and when you leave the tab.'),
+    ),
+
+    el('h4', { text: 'What never leaves this device' }),
+    el('ul', {},
+      el('li', {}, el('strong', { text: 'Your identity.' }), ' Your public key is never attached. ',
+        el('code', { text: 'shareIdentity' }), ' is ', el('code', { text: 'false' }), ' and there is no setting to turn it on.'),
+      el('li', {}, 'The text of anything you read, write, or reply with.'),
+      el('li', {}, 'Your relay list, your follow list, or your mute list.'),
+      el('li', {}, 'Timestamps finer than the batch itself.'),
+    ),
+
+    el('h4', { text: 'Where it goes' }),
+    el('p', {}, 'To the discovery service at ', el('code', { text: DVM_BASE_URL }),
+      '. In this build nothing is sent anywhere: the mock service prints each batch to the browser console instead.'),
+
+    el('h4', { text: `Buffered right now — ${buffer.length} record${buffer.length === 1 ? '' : 's'}` }),
+    el('pre', { class: 'json', text: buffer.length ? JSON.stringify(buffer, null, 2) : '[]' }),
+
+    el('div', { class: 'row-end' },
+      el('span', { class: 'hint', text: 'This is the exact payload, verbatim.' }),
+      el('button', {
+        class: 'btn', type: 'button', text: 'Clear buffer',
+        onclick: () => {
+          telemetry.records.clear();
+          telemetry.dirty.clear();
+          telemetry.save();
+          closeSheet();
+          toast('Buffer cleared. Nothing was sent.');
+        },
+      }),
+      el('button', { class: 'btn primary', type: 'button', text: 'Close', onclick: () => closeSheet() })),
+  );
+
+  openSheet({ title: 'What leaves this device', padded: true, body });
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   signer panel
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+function openSignerPanel() {
+  const pk = signer.pubkey;
+  const body = el('div', { class: 'composer prose' },
+    el('p', {}, 'Signed in as ', el('code', { text: shortNpub(pk) }), '.'),
+    el('p', {}, 'hatchling only ever asks your signer to sign what you explicitly publish: replies, reactions and mute-list updates. Your key never touches this page.'),
+    el('div', { class: 'row-end' },
+      el('button', { class: 'btn', type: 'button', text: 'Copy npub', onclick: async () => {
+        toast(await copyText(npubOf(pk)) ? 'npub copied.' : 'Could not copy.', { error: false });
+      } }),
+      el('button', { class: 'btn', type: 'button', text: 'Disconnect', onclick: () => { closeSheet(); signer.disconnect(); } }),
+      el('button', { class: 'btn primary', type: 'button', text: 'Done', onclick: () => closeSheet() })),
+  );
+  openSheet({ title: 'Signer', padded: true, body });
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   boot
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+function paintSignerButton() {
+  const btn = $('#signer-btn');
+  btn.dataset.state = signer.state;
+  const lbl = $('.lbl', btn);
+  lbl.textContent = signer.state === 'connected' ? shortNpub(signer.pubkey)
+    : signer.state === 'connecting' ? 'Connecting…'
+      : 'Connect';
+  btn.title = signer.state === 'connected' ? 'Signer connected' : 'Connect a NIP-07 signer';
+}
+
+/** Actions that need a signer flip live when the signer state changes. */
+function refreshActionAvailability() {
+  for (const btn of document.querySelectorAll('[data-action]')) {
+    const a = actionById.get(btn.dataset.action);
+    if (!a) continue;
+    const reason = disabledReason(a);
+    btn.disabled = !!reason;
+    btn.title = reason || a.label;
+  }
+}
+
+function boot() {
+  $('#brand-egg').innerHTML = I.egg;
+  $('#back-btn').innerHTML = I.back;
+  $('#privacy-btn').innerHTML = I.shield;
+  $('#relays-btn').innerHTML = I.relay;
+
+  $('#back-btn').addEventListener('click', () => views.back());
+  $('#privacy-btn').addEventListener('click', openPrivacyPanel);
+  $('#relays-btn').addEventListener('click', openRelayPanel);
+  $('#signer-btn').addEventListener('click', () => {
+    if (signer.connected) openSignerPanel();
+    else signer.connect();
+  });
+
+  signer.onChange(() => { paintSignerButton(); refreshActionAvailability(); });
+  paintSignerButton();
+
+  telemetry.load();
+  views.init($('#views'));
+  views.replaceRoot(createFeedView());
+
+  // Back button / gesture unwinds the view stack one step at a time.
+  window.addEventListener('popstate', (e) => {
+    const depth = e.state?.depth ?? 1;
+    while (views.stack.length > Math.max(1, depth)) {
+      if (!views.pop()) break;
+    }
+  });
+
+  // SPEC §7 — flush every 30s and on visibilitychange.
+  setInterval(() => telemetry.flush('interval'), FLUSH_INTERVAL_MS);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      telemetry.bankAll();
+      telemetry.flush('visibilitychange');
+    } else {
+      resumeDwell();
+    }
+  });
+  window.addEventListener('pagehide', () => { telemetry.bankAll(); telemetry.save(); });
+
+  if (lsGet(LS.autoconn, false) && Nip07Signer.isAvailable()) {
+    signer.connect({ silent: true });
+  }
+
+  console.info(
+    '%chatchling%c M1 — feed. Telemetry batches print here; open the shield icon to see exactly what would be sent.',
+    'color:#f2a93b;font-weight:700', 'color:inherit',
+  );
+}
+
+boot();
+</script>
+</body>
+</html>
