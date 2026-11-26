@@ -7,8 +7,8 @@ Existing nostr discovery is follow-graph proximity: you see accounts your
 follows already follow. That surfaces the well-connected, not the good, and it
 never surfaces the new. A discovery ranker needs a feedback loop, and no such
 loop exists on nostr today because engagement signal dies with the client
-session. **hatchling is the client that captures it. Rookery is the ranker that
-consumes it.**
+session. hatchling is the client that records that signal, and Rookery is the
+ranker that uses it.
 
 [`SPEC.md`](SPEC.md) is the durable reference for the whole system. This README
 covers what is actually built.
@@ -29,7 +29,7 @@ the telemetry schema are already the right shape for them.
 
 ## Running it
 
-Open `index.html` in a browser. That is the whole procedure.
+Open `index.html` in a browser.
 
 Chrome refuses ES module imports from `file://`, so from a checkout use any
 static server:
